@@ -2,55 +2,32 @@
   "format_version": 2,
   "header": {
     "name": "DLavie Visual",
-    "description": "DLavie Visual 3.0.1 • custom biome lighting + PBR-safe compatibility hotfix • Low / Medium / High",
+    "description": "DLavie Visual 4.0 • Natural / Cozy / Gloomy × Low / Medium / High • 128x PBR normals + baked AO",
     "uuid": "59261ff1-d2af-41da-a66e-5065854861b2",
-    "version": [
-      3,
-      0,
-      1
-    ],
-    "min_engine_version": [
-      1,
-      26,
-      40
-    ]
+    "version": [4, 0, 0],
+    "min_engine_version": [1, 26, 40]
   },
   "modules": [
     {
       "type": "resources",
       "uuid": "435b96ed-3dbb-45cf-9cd9-33d9bf958870",
-      "version": [
-        3,
-        0,
-        1
-      ]
+      "version": [4, 0, 0]
     }
   ],
-  "capabilities": [
-    "pbr"
-  ],
+  "capabilities": ["pbr"],
   "subpacks": [
-    {
-      "folder_name": "low",
-      "name": "Low • Mobile PBR",
-      "memory_tier": 1
-    },
-    {
-      "folder_name": "medium",
-      "name": "Medium • Balanced PBR",
-      "memory_tier": 1
-    },
-    {
-      "folder_name": "high",
-      "name": "High • Cinematic PBR",
-      "memory_tier": 1
-    }
+    {"folder_name":"natural_low","name":"Natural • Low","memory_tier":1},
+    {"folder_name":"natural_medium","name":"Natural • Medium","memory_tier":1},
+    {"folder_name":"natural_high","name":"Natural • High","memory_tier":1},
+    {"folder_name":"cozy_low","name":"Cozy • Low","memory_tier":1},
+    {"folder_name":"cozy_medium","name":"Cozy • Medium","memory_tier":1},
+    {"folder_name":"cozy_high","name":"Cozy • High","memory_tier":1},
+    {"folder_name":"gloomy_low","name":"Gloomy • Low","memory_tier":1},
+    {"folder_name":"gloomy_medium","name":"Gloomy • Medium","memory_tier":1},
+    {"folder_name":"gloomy_high","name":"Gloomy • High","memory_tier":1}
   ],
   "metadata": {
-    "authors": [
-      "DLavie",
-      "DC Team / Derivative authors (source reference)"
-    ],
+    "authors": ["DLavie", "DC Team / Derivative authors (source reference)"],
     "license": "DLavie Visual Proprietary + DERCODE License Agreement 2.5 for Derivative source",
     "url": "https://github.com/drmacze/DLavie-Visual"
   }
