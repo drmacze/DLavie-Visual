@@ -5,6 +5,7 @@ cd "$(dirname "$0")/.."
 rm -rf biomes subpacks textures pack_icon.png
 python3 tools/generate_configs.py
 python3 tools/generate_assets.py
+python3 tools/generate_materials.py
 python3 tools/validate_pack.py
 rm -rf dist
 mkdir -p dist
