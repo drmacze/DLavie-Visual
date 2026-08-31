@@ -1,0 +1,21 @@
+name: Build DLavie Visual
+on:
+  push:
+    branches: [main, "codex/**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install Pillow
+      - run: chmod +x tools/build.sh && ./tools/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DLavie-Visual-mcpack
+          path: dist/DLavie-Visual.mcpack
