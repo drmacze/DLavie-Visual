@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "DLavie Visual",
-    "description": "DLavie Visual 3.0 • custom material lighting, biome render profiles, Derivative water/fog • Low / Medium / High",
+    "description": "DLavie Visual 3.0.1 • custom biome lighting + PBR-safe compatibility hotfix • Low / Medium / High",
     "uuid": "59261ff1-d2af-41da-a66e-5065854861b2",
     "version": [
       3,
       0,
-      0
+      1
     ],
     "min_engine_version": [
       1,
@@ -22,7 +22,7 @@
       "version": [
         3,
         0,
-        0
+        1
       ]
     }
   ],
