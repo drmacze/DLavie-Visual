@@ -2,62 +2,68 @@
 
 ![DLavie Visual cover](branding/cover.svg)
 
-**DLavie Visual** is a Minecraft Bedrock **Vibrant Visuals + PBR** resource pack for the 26.x renderer line, with **Bedrock 26.45** as the primary target and **1.26.40** as the compatibility floor. iPhone 11 (A13) remains the minimum iPhone performance baseline.
+**DLavie Visual** is a Minecraft Bedrock **Vibrant Visuals shader/visual core** for the 26.x renderer line, with **Bedrock 26.45** as the primary target and **1.26.40** as the compatibility floor.
 
-## 4.0 visual architecture
+## 4.1 visual-only architecture
 
-DLavie Visual 4.0 is a material + lighting upgrade rather than another global-value-only pass. It combines custom biome/dimension lighting, atmosphere, volumetric fog, ACES grading, local lights, water optics and a DLavie-owned 128x PBR material suite.
+DLavie Visual is now deliberately separated from the future DLavie texture project. This repository **does not ship custom block albedo, normal, AO or MERS Texture Sets**. Block textures belong in a separate project so shader development and texture development can evolve independently.
 
-### Three distinct visual moods × three quality levels
+The visual pack focuses on renderer-facing systems only:
 
-The pack exposes **nine selectable subpacks** so visual style and performance are both preserved:
+- custom sun/moon lighting and time-of-day response,
+- atmosphere scattering and low-sun glare/godray character,
+- volumetric fog/media tuning,
+- ACES color grading,
+- biome-specific lighting/fog/grading,
+- Nether and End lighting/fog/grading,
+- dynamic/local light color and quality control,
+- water waves, absorption/scattering and optical caustics,
+- shadow quality scaling,
+- visual environment assets such as sun, moon, cirrus, rain and snow.
+
+## Three visual moods × three quality levels
+
+The pack exposes **nine selectable visual subpacks**:
 
 | Mood | Character |
 |---|---|
-| **Natural** | neutral daylight, realistic blue atmosphere, balanced saturation and water |
-| **Cozy** | warmer sun/interiors, amber local lights, softer warm haze and golden highlights |
-| **Gloomy** | cooler/desaturated daylight, darker ambient light, denser eerie fog and stronger atmosphere |
+| **Natural** | realistic neutral daylight, balanced atmosphere, cleaner water and natural night |
+| **Cozy** | warmer low sun and interiors, amber local lights, softer golden haze |
+| **Gloomy** | cooler/desaturated daylight, darker ambient fill, denser eerie fog and stronger night mood |
 
-Each mood is available in **Low, Medium and High**. Low reduces water/shadow cost, Medium is the iPhone 11 baseline, and High enables the strongest water/local-light/shadow settings.
+Each mood has **Low / Medium / High**. Quality changes renderer cost and visual depth, not block textures. High uses deeper shadow/ambient separation, stronger atmosphere, more water octaves and broader point-light use; Medium is the mobile baseline; Low is the performance path.
 
-## Per-biome and per-dimension lighting
+## Lighting architecture
 
-Eight Overworld render profiles are retained: default, forest, dense forest/jungle, dry/desert, cold/snow, swamp, cave/deep-dark and ocean. Each can use separate lighting, atmosphere, fog and color grading. Nether and End have their own lighting/fog/grading behavior and are additionally shifted by the selected Natural/Cozy/Gloomy mood.
+Eight Overworld visual profiles are generated: default, forest, dense forest/jungle, dry/desert, cold/snow, swamp, cave/deep-dark and ocean. Each can have separate lighting, atmosphere, fog and color grading. Nether and End also receive their own visual treatment.
 
-The daylight scale remains calibrated to the Bedrock Vibrant Visuals resource-pack range instead of the erroneous extreme values from older DLavie builds.
+4.1 adds an extra visual-core post pass that deepens the difference between direct sunlight, sky fill and ambient light. This is specifically intended to avoid the flat "vanilla Vibrant Visuals with different values" look from earlier DLavie versions.
 
-## 128x material detail
+## Atmosphere and grading
 
-DLavie 4.0 authors **117 common terrain/building materials** directly in the pack. Each authored material contains:
+Sun Mie scattering and glare are strengthened mainly around sunrise/sunset while noon stays in the calibrated Bedrock brightness range. Natural stays neutral, Cozy shifts toward warm gold, and Gloomy shifts toward cool/desaturated atmospheric scattering.
 
-- a DLavie-owned color/albedo texture with a Minecraft-like pixel language,
-- a genuine **128x normal map**,
-- a **128x ambient-occlusion source**,
-- a 128x MERS/subsurface map for metallic, emissive, roughness and foliage response.
+Color grading uses ACES with theme-specific white balance, contrast and saturation. High presets intentionally keep stronger shadow separation than Low.
 
-Bedrock Texture Sets do **not** expose a dedicated AO slot. Therefore the authored 128x AO is baked into DLavie's color layer, while normal and MERS/subsurface maps are consumed directly by Vibrant Visuals. Every Texture Set references color/normal/MERS assets that exist in this same pack, preventing the magenta checkerboard regression from 3.0.0.
+## Water
 
-Materials currently cover core stone/deepslate, dirt/grass, sand/sandstone, major woods/logs/leaves, glass, ice/snow, common ores, iron/gold/copper/gem blocks, quartz, Nether/End surfaces and major emissive blocks.
+River, ocean, swamp, frozen and default water remain separate profiles. Low/Medium/High use different wave octave counts, frequency, animation speed and caustics strength.
 
-## Optical water caustics
+The optical caustics atlas is a **60-frame 128px** visual effect generated offline by tracing refracted rays through a simulated multi-wave water surface using Snell-law refraction. It is a shader/environment asset, not a block texture.
 
-4.0 replaces the old caustics path with a new **60-frame 128x optical caustics atlas** generated offline from a simulated multi-wave ocean surface. The generator traces refracted light using Snell's law, intersects the refracted rays with an underwater floor and accumulates photon density into the caustics texture. This is a physically based offline optical simulation; it is not a fake noise overlay.
+## Texture-pack compatibility
 
-Low/Medium/High adjust wave octaves, frequency and caustics strength independently. River, ocean, swamp, frozen water and default water profiles remain separate.
-
-## PBR compatibility
-
-A Texture Set must own its color image and all referenced PBR images in the same resource pack. DLavie therefore only defines per-texture PBR data for textures it actually owns. Unauthored/third-party textures fall back to `pbr/global.json` rather than receiving invalid cross-pack Texture Sets.
+DLavie Visual intentionally contains **zero block Texture Sets**. A separate texture/PBR project can be stacked with DLavie later and own its albedo/normal/MERS data correctly. Textures without their own Texture Sets continue to use the safe global PBR fallback supplied by the renderer config.
 
 ## Installation
 
 1. Import `DLavie-Visual.mcpack` into Minecraft.
-2. Remove/disable older DLavie builds to avoid cached assets.
+2. Remove/disable older DLavie builds to avoid cached resources.
 3. Enable **DLavie Visual** in Global Resources or the world resource stack.
-4. Open the pack gear icon and choose Natural/Cozy/Gloomy plus Low/Medium/High.
+4. Use the pack gear icon to select Natural/Cozy/Gloomy plus Low/Medium/High.
 5. Enable **Vibrant Visuals** in Settings → Video on supported hardware.
 
-For iPhone 11, start with **Natural • Medium** or **Cozy • Medium** around 8–12 chunks. Use a Low preset while recording or if the device thermally throttles.
+For iPhone 11, start with **Natural • Medium** around 8–12 chunks. Use Low while recording or if thermal throttling is noticeable.
 
 ## Build
 
@@ -68,7 +74,7 @@ python3 -m pip install Pillow numpy
 ./tools/build.sh
 ```
 
-The build regenerates all runtime resources, produces the 128x material maps and optical caustics, expands the nine subpacks, validates every same-pack Texture Set reference and writes `dist/DLavie-Visual.mcpack`.
+The build regenerates renderer configs, visual environment assets and optical caustics, expands all nine visual subpacks, runs the visual-core enhancement pass, verifies that **no block textures/Texture Sets exist**, then writes `dist/DLavie-Visual.mcpack`.
 
 ## Derivative source / license
 
@@ -76,4 +82,4 @@ The supplied Derivative 25.1.0 Java shader remains an art-direction/reference so
 
 ## Compatibility statement
 
-DLavie uses supported Bedrock/Vibrant Visuals resource-pack interfaces rather than patched APK/IPAs or private RenderDragon injection. CI can verify structure and generated assets; final visual calibration, thermals and FPS still require physical Android/iPhone testing.
+DLavie uses supported Bedrock/Vibrant Visuals resource-pack interfaces rather than patched APK/IPAs or private RenderDragon injection. CI verifies pack structure and visual resources; final visual calibration, thermals and FPS still require physical Android/iPhone testing.

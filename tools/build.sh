@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-# Rebuild every runtime resource from authored generators to avoid stale texture-set data.
+# Visual-only build: no block albedo/normal/AO/MERS generation in this project.
 rm -rf biomes subpacks textures pack_icon.png
 python3 tools/generate_configs.py
 python3 tools/generate_assets.py
-python3 tools/generate_material_suite.py
 python3 tools/generate_optical_caustics.py
 python3 tools/generate_themes.py
+python3 tools/enhance_visual_core.py
 python3 tools/validate_pack.py
 rm -rf dist
 mkdir -p dist
