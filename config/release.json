@@ -1,8 +1,8 @@
 {
   "name": "DLavie Visual",
-  "version": [4, 5, 2],
-  "version_string": "4.5.2",
+  "version": [4, 5, 3],
+  "version_string": "4.5.3",
   "target_bedrock": "26.45",
   "min_engine_version": [1, 26, 40],
-  "description": "DLavie Visual 4.5.2 • runtime-loader failsafe • PBR visual core + underwater/night/weather • no block textures"
+  "description": "DLavie Visual 4.5.3 • fixed vanilla biome bindings • PBR visual core + underwater/night/weather • no block textures"
 }
