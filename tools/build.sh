@@ -52,6 +52,8 @@ python3 -B tools/enhance_visual_core.py
 python3 -B tools/enhance_volumetric_fog.py
 python3 -B tools/enhance_weather_water.py
 python3 -B tools/enhance_underwater_night.py
+# PBR compatibility now also performs the 4.6 deferred-core local-light/water pass,
+# then installs the Natural-Medium root renderer failsafe.
 python3 -B tools/enhance_pbr_compat.py
 
 # Runtime canary: prove that pack-active actually means vanilla biomes resolve DLavie renderer IDs.
