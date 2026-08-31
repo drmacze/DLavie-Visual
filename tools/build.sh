@@ -8,8 +8,10 @@ python3 -B tools/sync_release.py
 
 # Visual-only build: no block albedo/normal/AO/MERS generation in this project.
 rm -rf biomes subpacks textures pack_icon.png _quality_subpacks
-python3 -B tools/generate_configs.py
-python3 -B tools/generate_assets.py
+python3 -B tools/generate_configs.py >/dev/null
+echo "Generated base renderer configs"
+python3 -B tools/generate_assets.py >/dev/null
+echo "Generated visual environment assets"
 python3 -B tools/generate_optical_caustics.py
 python3 -B tools/generate_themes.py
 python3 -B tools/enhance_visual_core.py
@@ -18,7 +20,7 @@ python3 -B tools/enhance_weather_water.py
 python3 -B tools/enhance_underwater_night.py
 python3 -B tools/enhance_pbr_compat.py
 
-# Existing feature-level validator + new cross-system runtime audit.
+# Feature-level validator + cross-system runtime audit.
 python3 -B tools/validate_pack.py
 python3 -B tools/audit_release.py generated
 
