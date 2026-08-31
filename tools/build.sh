@@ -7,7 +7,10 @@ python3 -B tools/audit_release.py source
 python3 -B tools/sync_release.py
 
 # Visual-only build: no block albedo/normal/AO/MERS generation in this project.
-rm -rf biomes subpacks textures pack_icon.png _quality_subpacks
+# Root renderer folders are regenerated too because 4.5.2 installs a safe Natural-Medium
+# fallback there; selected subpacks still override those root files normally.
+rm -rf biomes subpacks textures pack_icon.png _quality_subpacks \
+  atmospherics lighting color_grading fogs water pbr local_lighting shadows
 python3 -B tools/generate_configs.py >/dev/null
 echo "Generated base renderer configs"
 python3 -B tools/generate_assets.py >/dev/null

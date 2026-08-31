@@ -2,8 +2,7 @@
 """Feature-level validation for the generated DLavie Visual runtime.
 
 Release/package/reference integrity is handled by audit_release.py. This validator
-stays focused on required renderer features and intentionally reads the current
-version from config/release.json instead of hard-coding a historical release.
+stays focused on required renderer features and the runtime loader safety net.
 """
 from __future__ import annotations
 
@@ -32,6 +31,17 @@ def load(path: Path):
     except Exception as exc:
         err(f"{path.relative_to(ROOT)}: invalid JSON: {exc}")
         return {}
+
+
+def collect_ids(folder: Path, component: str) -> set[str]:
+    ids: set[str] = set()
+    for path in folder.glob("*.json"):
+        ident = load(path).get(component, {}).get("description", {}).get("identifier")
+        if isinstance(ident, str):
+            if ident in ids:
+                err(f"{folder.relative_to(ROOT)}: duplicate identifier {ident}")
+            ids.add(ident)
+    return ids
 
 
 def main() -> None:
@@ -131,6 +141,45 @@ def main() -> None:
         if len(list((root / "biomes").glob("*.client_biome.json"))) < 87:
             err(f"subpacks/{sp}: biome bindings incomplete")
 
+    # 4.5.2 loader safety net. The root pack must be usable even if the client has
+    # not resolved a subpack yet. Reserved filenames follow Mojang's VV layout.
+    root_required = (
+        "atmospherics/atmospherics.json", "lighting/global.json",
+        "color_grading/color_grading.json", "fogs/default.json", "water/water.json",
+        "pbr/global.json", "local_lighting/local_lighting.json", "shadows/global.json",
+    )
+    for rel in root_required:
+        if not (ROOT / rel).is_file():
+            err(f"runtime loader failsafe missing {rel}")
+
+    root_regs = {
+        "fog": collect_ids(ROOT / "fogs", "minecraft:fog_settings"),
+        "atmosphere": collect_ids(ROOT / "atmospherics", "minecraft:atmosphere_settings"),
+        "grading": collect_ids(ROOT / "color_grading", "minecraft:color_grading_settings"),
+        "lighting": collect_ids(ROOT / "lighting", "minecraft:lighting_settings"),
+        "water": collect_ids(ROOT / "water", "minecraft:water_settings"),
+    }
+    specs = (
+        ("minecraft:fog_appearance", "fog_identifier", "fog"),
+        ("minecraft:atmosphere_identifier", "atmosphere_identifier", "atmosphere"),
+        ("minecraft:color_grading_identifier", "color_grading_identifier", "grading"),
+        ("minecraft:lighting_identifier", "lighting_identifier", "lighting"),
+        ("minecraft:water_identifier", "water_identifier", "water"),
+    )
+    base_biomes = list((ROOT / "biomes").glob("*.client_biome.json"))
+    if len(base_biomes) < 87:
+        err("root biome loader safety net is incomplete")
+    for path in base_biomes:
+        comps = load(path).get("minecraft:client_biome", {}).get("components", {})
+        for comp, field, registry in specs:
+            node = comps.get(comp)
+            if isinstance(node, dict):
+                ident = node.get(field)
+                if not isinstance(ident, str) or not ident.startswith("dlavie_root:"):
+                    err(f"{path.relative_to(ROOT)}: root failsafe {field} not namespaced")
+                elif ident not in root_regs[registry]:
+                    err(f"{path.relative_to(ROOT)}: unresolved root failsafe {field}={ident}")
+
     # Visual project boundary: material textures belong to the separate texture project.
     block_dir = ROOT / "textures" / "blocks"
     if block_dir.exists() and any(block_dir.iterdir()):
@@ -139,6 +188,17 @@ def main() -> None:
         err("visual project contains block Texture Sets")
     if (ROOT / "tools" / "generate_materials.py").exists() or (ROOT / "tools" / "generate_material_suite.py").exists():
         err("obsolete block-material generator still exists")
+
+    legacy_caustics = ROOT / "textures" / "dlavie" / "derivative_caustics.png"
+    if legacy_caustics.exists():
+        err("obsolete derivative_caustics.png survived runtime generation")
+    textures_list = ROOT / "textures" / "textures_list.json"
+    if not textures_list.is_file():
+        err("textures_list.json missing")
+    else:
+        listed = load(textures_list)
+        if listed != ["textures/dlavie/optical_caustics"]:
+            err(f"textures_list.json contains stale runtime assets: {listed}")
 
     caustics_path = ROOT / "textures" / "dlavie" / "optical_caustics.png"
     if not caustics_path.is_file():
@@ -156,7 +216,7 @@ def main() -> None:
         for message in errors:
             print(" -", message)
         raise SystemExit(1)
-    print(f"Validation OK: DLavie Visual {release.get('version_string')} renderer features are present and texture-project boundaries are clean")
+    print(f"Validation OK: DLavie Visual {release.get('version_string')} renderer, root loader failsafe and texture-project boundaries are clean")
 
 
 if __name__ == "__main__":
