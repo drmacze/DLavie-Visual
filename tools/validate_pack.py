@@ -10,7 +10,7 @@ def load(p):
 
 m=load('manifest.json')
 if m.get('format_version')!=2:err('manifest format_version must be 2')
-if m.get('header',{}).get('version')!=[4,3,0]:err('expected version 4.3.0')
+if m.get('header',{}).get('version')!=[4,4,0]:err('expected version 4.4.0')
 if m.get('header',{}).get('min_engine_version',[])<[1,26,40]:err('min engine must be >=1.26.40')
 if 'pbr' not in m.get('capabilities',[]):err('pbr capability missing')
 expected=[f'{t}_{q}' for t in ('natural','cozy','gloomy') for q in ('low','medium','high')]
@@ -20,7 +20,15 @@ for sp in m.get('subpacks',[]):
     if sp.get('memory_tier',99)>1:err(f"{sp.get('folder_name')}: memory_tier would lock mobile selection")
 
 profiles=('default','forest','dense','dry','cold','swamp','cave','ocean')
+ore_hooks={
+ 'minecraft:coal_ore','minecraft:deepslate_coal_ore','minecraft:iron_ore','minecraft:deepslate_iron_ore',
+ 'minecraft:copper_ore','minecraft:deepslate_copper_ore','minecraft:gold_ore','minecraft:deepslate_gold_ore',
+ 'minecraft:redstone_ore','minecraft:deepslate_redstone_ore','minecraft:lapis_ore','minecraft:deepslate_lapis_ore',
+ 'minecraft:diamond_ore','minecraft:deepslate_diamond_ore','minecraft:emerald_ore','minecraft:deepslate_emerald_ore',
+ 'minecraft:nether_gold_ore','minecraft:nether_quartz_ore','minecraft:ancient_debris'
+}
 for pre in expected:
+    theme,quality=pre.rsplit('_',1)
     for v in profiles:
         for folder in ('atmospherics','lighting','color_grading','fogs'):
             p=Path('subpacks')/pre/folder/f'{v}.json'
@@ -30,6 +38,26 @@ for pre in expected:
         p=Path('subpacks')/pre/rel
         if not (ROOT/p).is_file():err('missing '+str(p))
         else:load(p)
+
+    # Overworld lighting uses schema 1.26.0 so ambient/sky time keyframes are formally supported.
+    for lp in (ROOT/'subpacks'/pre/'lighting').glob('*.json'):
+        if lp.stem in ('nether','end'): continue
+        rel=lp.relative_to(ROOT); lo=load(rel)
+        if lo.get('format_version')!='1.26.0':err(f'{rel}: expected lighting schema 1.26.0')
+        ls=lo.get('minecraft:lighting_settings',{})
+        amb=ls.get('ambient',{}).get('illuminance',{})
+        sky=ls.get('sky',{}).get('intensity',{})
+        if not isinstance(amb,dict) or '0.50' not in amb:err(f'{rel}: missing midnight ambient keyframe')
+        elif float(amb['0.50'])>0.012:err(f'{rel}: midnight ambient too bright')
+        if not isinstance(sky,dict) or '0.50' not in sky:err(f'{rel}: missing midnight sky keyframe')
+        elif float(sky['0.50'])>0.20:err(f'{rel}: midnight sky too bright')
+
+    for ap in (ROOT/'subpacks'/pre/'atmospherics').glob('*.json'):
+        if ap.stem in ('nether','end'): continue
+        rel=ap.relative_to(ROOT); at=load(rel).get('minecraft:atmosphere_settings',{})
+        zen=at.get('sky_zenith_color',{}); hor=at.get('sky_horizon_color',{})
+        if not all(k in zen for k in ('0.315','0.50','0.685')):err(f'{rel}: incomplete twilight/midnight zenith keys')
+        if not all(k in hor for k in ('0.315','0.50','0.685')):err(f'{rel}: incomplete twilight/midnight horizon keys')
 
     for fp in (ROOT/'subpacks'/pre/'fogs').glob('*.json'):
         rel=fp.relative_to(ROOT); fo=load(rel)
@@ -55,6 +83,7 @@ for pre in expected:
         elif 'transition_fog' not in water_dist:err(f'{rel}: missing smooth underwater transition fog')
         if fp.stem not in ('cave','nether','end') and 'weather' not in dist:err(f'{rel}: missing active-weather distance haze')
 
+    min_oct={'low':7,'medium':14,'high':20}[quality]
     for wk in ('default','river','ocean','swamp','frozen'):
         p=Path('subpacks')/pre/f'water/{wk}.json'
         if not (ROOT/p).is_file():err('missing '+str(p));continue
@@ -63,7 +92,7 @@ for pre in expected:
         if not all(x in pc for x in ('chlorophyll','suspended_sediment','cdom')):err(f'{p}: missing depth-absorption particle concentrations')
         waves=w.get('waves',{})
         if not waves.get('enabled'):err(f'{p}: waves disabled')
-        if int(waves.get('octaves',0))<6:err(f'{p}: insufficient wave octaves')
+        if int(waves.get('octaves',0))<min_oct:err(f'{p}: expected at least {min_oct} wave octaves')
         ca=w.get('caustics',{})
         if not ca.get('enabled'):err(f'{p}: caustics disabled')
         elif ca.get('texture')!='textures/dlavie/optical_caustics':err(f'{p}: not using optical caustics')
@@ -78,6 +107,11 @@ for pre in expected:
     if isinstance(amb,dict) and max((float(x) for x in amb.values()),default=0)>0.08:err(f'{pre}: ambient too flat/bright for visual-core target')
     ll=load(Path('subpacks')/pre/'local_lighting/local_lighting.json').get('minecraft:local_light_settings',{})
     if len(ll)<12:err(f'{pre}: local-light coverage too small')
+    missing_ore=sorted(ore_hooks-set(ll))
+    if missing_ore:err(f'{pre}: missing ore local-light hooks: {missing_ore[:4]}')
+    if quality=='high':
+        for b in ore_hooks:
+            if ll.get(b,{}).get('light_type')!='point_light':err(f'{pre}: high ore hook {b} must be point_light')
     if len(list((ROOT/'subpacks'/pre/'biomes').glob('*.client_biome.json')))<87:err(f'{pre}: missing theme-specific biome bindings')
 
 # Shader/visual-only project boundary.
@@ -86,7 +120,8 @@ if block_dir.exists() and any(block_dir.iterdir()):err('visual project contains 
 sets=list(ROOT.rglob('*.texture_set.json'))
 if sets:err(f'visual project contains {len(sets)} Texture Sets; move them to the texture project')
 if (ROOT/'tools'/'generate_material_suite.py').exists():err('block material generator still exists in visual project')
-if not (ROOT/'tools'/'enhance_weather_water.py').is_file():err('missing weather/water enhancement pass')
+for tool in ('enhance_weather_water.py','enhance_underwater_night.py'):
+    if not (ROOT/'tools'/tool).is_file():err('missing '+tool)
 
 ca=ROOT/'textures/dlavie/optical_caustics.png'
 if not ca.is_file():err('missing optical caustics')
@@ -98,4 +133,4 @@ for rel in ('ui/_ui_defs.json','ui/dlavie_ui.json','ui/start_screen.json','brand
     if not (ROOT/rel).is_file():err('missing '+rel)
 if errors:
     print('VALIDATION FAILED');[print(' -',e) for e in errors];sys.exit(1)
-print('Validation OK: DLavie Visual 4.3 visual core, interactive weather fog/cloud media + advanced depth-absorbing water, 9 presets, zero block textures')
+print('Validation OK: DLavie Visual 4.4 visual core, advanced underwater shafts/caustics + 1.26.0 cinematic night keyframes + ore light hooks, 9 presets, zero block textures')
