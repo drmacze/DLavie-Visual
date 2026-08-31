@@ -11,6 +11,7 @@ python3 tools/enhance_visual_core.py
 python3 tools/enhance_volumetric_fog.py
 python3 tools/enhance_weather_water.py
 python3 tools/enhance_underwater_night.py
+python3 tools/enhance_pbr_compat.py
 python3 tools/validate_pack.py
 rm -rf dist
 mkdir -p dist
