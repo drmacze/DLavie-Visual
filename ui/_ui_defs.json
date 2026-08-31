@@ -1,0 +1,6 @@
+{
+  "ui_defs": [
+    "ui/dlavie_ui.json",
+    "ui/start_screen.json"
+  ]
+}

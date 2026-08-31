@@ -1,72 +1,143 @@
 #!/usr/bin/env python3
-"""Regenerate deterministic DLavie Visual binary art/environment assets."""
+"""Generate deterministic DLavie Visual runtime assets. The cover is hand-authored SVG."""
 from pathlib import Path
 import math
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
-ROOT=Path(__file__).resolve().parents[1]
-PRESETS={"low":64,"medium":128,"high":256}
-SAT={"low":1.03,"medium":1.08,"high":1.12}
-def font(size,bold=False):
-    choices=["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf","/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf"]
-    for p in choices:
-        if Path(p).exists(): return ImageFont.truetype(p,size)
-    return ImageFont.load_default()
+from PIL import Image, ImageDraw, ImageFilter, ImageEnhance
+
+ROOT = Path(__file__).resolve().parents[1]
+PRESETS = {"low": 128, "medium": 256, "high": 512}
+
+
 def gradient(size):
-    w,h=size; im=Image.new("RGB",size); px=im.load()
+    w, h = size
+    im = Image.new("RGB", size)
+    p = im.load()
     for y in range(h):
-        t=y/max(1,h-1)
-        for x in range(w): px[x,y]=(7+int(17*(1-t))+int(10*x/w),15+int(24*(1-t))+int(8*x/w),28+int(45*(1-t))+int(28*x/w))
+        t = y / max(1, h - 1)
+        for x in range(w):
+            p[x, y] = (int(8 + 15 * (1 - t)), int(18 + 28 * (1 - t)), int(34 + 48 * (1 - t)))
     return im
-def mark(im,box):
-    d=ImageDraw.Draw(im,"RGBA"); x0,y0,x1,y1=box; w=x1-x0; h=y1-y0
-    mask=Image.new("L",im.size,0); md=ImageDraw.Draw(mask)
-    md.rounded_rectangle((x0+int(.10*w),y0+int(.06*h),x0+int(.29*w),y1-int(.06*h)),radius=int(.04*w),fill=255)
-    md.ellipse((x0+int(.16*w),y0+int(.06*h),x1-int(.05*w),y1-int(.06*h)),fill=255); md.ellipse((x0+int(.33*w),y0+int(.24*h),x1-int(.23*w),y1-int(.24*h)),fill=0)
-    g=Image.new("RGBA",im.size,(0,0,0,0)); gp=g.load()
-    for yy in range(max(0,y0),min(im.height,y1)):
-        t=(yy-y0)/max(1,h); c=(int(47+207*t),int(224-56*t),int(255-137*t),255)
-        for xx in range(max(0,x0),min(im.width,x1)): gp[xx,yy]=c
-    im.alpha_composite(Image.composite(g,Image.new("RGBA",im.size,(0,0,0,0)),mask))
-# icon
-im=gradient((512,512)).convert("RGBA"); glow=Image.new("RGBA",im.size,(0,0,0,0)); ImageDraw.Draw(glow).ellipse((60,70,470,480),fill=(43,182,255,75)); im.alpha_composite(glow.filter(ImageFilter.GaussianBlur(70))); mark(im,(86,46,435,468)); im.save(ROOT/"pack_icon.png",optimize=True)
-# cover
-cover=gradient((1280,720)).convert("RGBA"); d=ImageDraw.Draw(cover,"RGBA"); d.rectangle((0,420,1280,720),fill=(7,39,65,255))
-rays=Image.new("RGBA",cover.size,(0,0,0,0)); rd=ImageDraw.Draw(rays,"RGBA")
-for i in range(18):
-    x=70+i*72; rd.polygon([(x,0),(x+45,0),(x+260,720),(x+180,720)],fill=(70,190,255,7+i%3*3))
-cover.alpha_composite(rays.filter(ImageFilter.GaussianBlur(3)))
-g=Image.new("RGBA",cover.size,(0,0,0,0)); ImageDraw.Draw(g).ellipse((940,80,1190,330),fill=(255,171,73,120)); cover.alpha_composite(g.filter(ImageFilter.GaussianBlur(70))); d=ImageDraw.Draw(cover,"RGBA"); d.polygon([(0,490),(170,350),(315,480),(460,315),(650,482),(820,360),(1010,480),(1160,330),(1280,450),(1280,720),(0,720)],fill=(8,22,34,255))
-for y in range(500,710,17): d.line((650-(y-500),y,1260,y),fill=(80,207,255,max(12,80-(y-500)//4)),width=2)
-mark(cover,(75,115,355,545)); d=ImageDraw.Draw(cover,"RGBA"); d.text((390,180),"DLavie",font=font(105,True),fill=(245,250,255,255)); d.text((397,292),"VISUAL",font=font(64,True),fill=(94,215,255,255),stroke_width=1,stroke_fill=(20,80,110,255)); d.text((400,382),"VIBRANT VISUALS  •  PBR  •  MOBILE TUNED",font=font(28,True),fill=(232,238,245,220)); d.text((400,438),"Low  /  Medium  /  High",font=font(25),fill=(194,212,228,220)); (ROOT/"branding").mkdir(exist_ok=True); cover.convert("RGB").save(ROOT/"branding/cover.jpg",quality=88,optimize=True,progressive=True)
-for name,size in PRESETS.items():
-    base=ROOT/"subpacks"/name/"textures"/"environment"; base.mkdir(parents=True,exist_ok=True)
-    cloud=Image.new("RGBA",(size,size),(0,0,0,0)); cp=cloud.load()
+
+
+# Pack icon: procedural/vector-like mark. No AI image generation.
+im = gradient((512, 512)).convert("RGBA")
+d = ImageDraw.Draw(im, "RGBA")
+d.ellipse((74, 64, 438, 428), fill=(58, 187, 255, 24))
+d.rounded_rectangle((106, 96, 184, 418), 24, fill=(225, 245, 255, 240))
+d.ellipse((136, 96, 418, 418), fill=(225, 245, 255, 240))
+d.ellipse((202, 166, 347, 348), fill=(11, 28, 52, 255))
+d.ellipse((278, 40, 470, 232), fill=(255, 183, 101, 32))
+im = im.filter(ImageFilter.GaussianBlur(0.25))
+im.save(ROOT / "pack_icon.png", optimize=True)
+
+
+# Derivative Profile.Derivative uses planar CIRRUS_CLOUDS=2 and disables volumetric clouds.
+# Build a deterministic wispy planar density field instead of shipping unusable Java 3D cloud LUT/noise data.
+BASE = 512
+seed = Image.new("L", (BASE, BASE))
+sp = seed.load()
+for y in range(BASE):
+    v = y / BASE
+    for x in range(BASE):
+        u = x / BASE
+        broad = (
+            math.sin(u * math.tau * 3.2 + math.sin(v * math.tau * 2.1) * 1.7)
+            + 0.62 * math.sin((u * 5.7 + v * 1.3) * math.tau)
+            + 0.37 * math.sin((u * 11.4 - v * 3.8) * math.tau + 1.9)
+            + 0.21 * math.sin((u * 23.1 + v * 7.2) * math.tau)
+        )
+        streak = 0.5 + 0.5 * math.sin((u * 7.0 + 0.13 * math.sin(v * math.tau * 4.0)) * math.tau)
+        value = 112 + broad * 34 + streak * 24
+        sp[x, y] = max(0, min(255, int(value)))
+seed = seed.filter(ImageFilter.GaussianBlur(2.4))
+
+for name, size in PRESETS.items():
+    env = ROOT / "subpacks" / name / "textures" / "environment"
+    env.mkdir(parents=True, exist_ok=True)
+    src = seed.resize((size, size), Image.Resampling.LANCZOS)
+    src = ImageEnhance.Contrast(src).enhance(1.55 if name == "low" else 1.8)
+    streak = src.resize((size * 2, max(1, size // 3)), Image.Resampling.BICUBIC).resize((size, size), Image.Resampling.BICUBIC)
+    streak = streak.filter(ImageFilter.GaussianBlur(max(0.6, size / 180)))
+    mask = Image.blend(src, streak, 0.72)
+    mask = mask.point(lambda v: max(0, min(178, int((v - 100) * 1.78))))
+    cloud = Image.new("RGBA", (size, size), (239, 246, 252, 0))
+    cloud.putalpha(mask)
+    cloud.save(env / "clouds.png", optimize=True)
+
+    # Sun disc + soft corona. Shafts are created by Mie scattering + volumetric fog configs.
+    sun = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    px = sun.load()
+    c = (size - 1) / 2
     for y in range(size):
         for x in range(size):
-            u=x/size; v=y/size; n=(math.sin(u*11.3+math.sin(v*8.1))*.28+math.sin(v*15.7+u*4.3)*.24+math.sin((u+v)*29)*.12+.5); h=math.sin((x*12.9898+y*78.233+size*2.1))*43758.5453; detail=h-math.floor(h); dens=max(0,min(1,n*.74+detail*.26-.18)); a=int((120 if name=="low" else 165 if name=="medium" else 195)*(dens**1.75)); cp[x,y]=(232,241,250,a)
-    cloud.filter(ImageFilter.GaussianBlur(.45 if name=="high" else .7)).save(base/"clouds.png",optimize=True)
-    sun=Image.new("RGBA",(size,size),(0,0,0,0)); sp=sun.load(); c=(size-1)/2
-    for y in range(size):
-        for x in range(size):
-            q=math.hypot(x-c,y-c)/(size*.5); sp[x,y]=(255,230,165,int(255*max(0,min(1,(1.02-q)*8))))
-    sun.save(base/"sun.png",optimize=True)
-    atlas=Image.new("RGBA",(size*4,size*2),(0,0,0,0)); ap=atlas.load()
+            q = math.hypot(x - c, y - c) / (size * 0.5)
+            disc = max(0.0, min(1.0, (0.44 - q) * 34.0))
+            corona = max(0.0, min(1.0, (0.74 - q) / 0.30)) ** 2.2
+            alpha = int(255 * max(disc, corona * 0.28))
+            warm = max(0.0, min(1.0, q / 0.74))
+            px[x, y] = (255, int(244 - 18*warm), int(205 - 42*warm), alpha)
+    sun.save(env / "sun.png", optimize=True)
+
+    moon = Image.new("RGBA", (size * 4, size * 2), (0, 0, 0, 0))
+    mp = moon.load()
     for py in range(2):
-        for pxidx in range(4):
-            phase=py*4+pxidx
+        for pxi in range(4):
+            phase = py * 4 + pxi
             for y in range(size):
                 for x in range(size):
-                    dx=(x-c)/(size*.5); dy=(y-c)/(size*.5); r=math.hypot(dx,dy)
-                    if r>1: continue
-                    limb=math.cos(phase/8*math.tau)*.78; lit=(dx>=limb) if phase<4 else (dx<=limb); val=max(145,min(245,int(215+math.sin((x*7+y*13+phase*19)*.33)*7))); a=int(255*max(0,min(1,(1.01-r)*12))); ap[pxidx*size+x,py*size+y]=(val,val+4,min(255,val+16),a if lit else int(a*.18))
-    atlas.save(base/"moon_phases.png",optimize=True)
-    cb=ROOT/"subpacks"/name/"textures"/"colormap"; cb.mkdir(parents=True,exist_ok=True)
-    for kind in ("grass","foliage"):
-        cm=Image.new("RGBA",(size,size)); pp=cm.load()
-        for y in range(size):
-            for x in range(size):
-                heat=x/max(1,size-1); rain=1-y/max(1,size-1)
-                col=(int(42+56*heat),int(105+75*rain*SAT[name]),int(42+48*rain),255) if kind=="grass" else (int(34+40*heat),int(88+90*rain*SAT[name]),int(38+54*rain),255)
-                pp[x,y]=tuple(max(0,min(255,v)) for v in col)
-        cm.save(cb/(kind+".png"),optimize=True)
-print("Generated DLavie Visual assets")
+                    dx = (x - c) / (size * 0.5)
+                    dy = (y - c) / (size * 0.5)
+                    rr = math.hypot(dx, dy)
+                    if rr > 1:
+                        continue
+                    terminator = math.cos(phase / 8 * math.tau) * 0.78
+                    lit = (dx >= terminator) if phase < 4 else (dx <= terminator)
+                    val = int(212 + 16 * (1 - rr))
+                    aa = int(255 * max(0, min(1, (1.01 - rr) * 14)))
+                    mp[pxi * size + x, py * size + y] = (val, min(255, val + 7), 255, aa if lit else int(aa * 0.14))
+    moon.save(env / "moon_phases.png", optimize=True)
+
+    # No grass/foliage colormap override: preserve natural colors from vanilla or the user's texture pack.
+
+
+# Bedrock custom caustics are a vertical strip of square frames. Derivative ships 60 frames at 128px.
+# Prefer the exact/converted Derivative atlas from the supplied source when available locally.
+# CI/repository builds fall back to a deterministic low-contrast reconstruction with identical 128x60 layout.
+W = 128
+FRAMES = 60
+source_candidates = [
+    ROOT.parent / "derivative_src" / "shaders" / "texture" / "water" / "Caustics.png",
+    ROOT / "third_party_runtime" / "Derivative_Caustics.png",
+]
+source = next((x for x in source_candidates if x.is_file()), None)
+if source:
+    caustics = Image.open(source).convert("RGBA")
+else:
+    caustics = Image.new("RGBA", (W, W * FRAMES), (0,0,0,0))
+    for frame in range(FRAMES):
+        phase = frame / FRAMES * math.tau
+        fr = Image.new("L", (W, W), 0); fp=fr.load()
+        for y in range(W):
+            yy=y/W*math.tau
+            for x in range(W):
+                xx=x/W*math.tau
+                a=math.sin(xx*2.4+0.70*math.sin(yy*1.7+phase)+phase)
+                b=math.sin(yy*2.8+0.64*math.sin(xx*1.9-phase)-phase*1.1)
+                c=math.sin((xx+yy)*1.65+0.52*math.sin(xx*3.5-yy*2.6+phase*.7))
+                ridge=max(0.0,1.0-abs(a+b)*1.55)**4.0 + 0.55*max(0.0,1.0-abs(b+c*.7)*1.8)**4.6
+                fp[x,y]=int(min(112, 8+92*min(1.0,ridge)))
+        fr=fr.filter(ImageFilter.GaussianBlur(.55))
+        rgba=Image.new("RGBA",(W,W),(255,238,208,0)); rgba.putalpha(fr.point(lambda v:max(4,min(72,int(v*.58)))))
+        caustics.paste(rgba,(0,frame*W))
+tex = ROOT / "textures"; tex.mkdir(exist_ok=True)
+dst = tex / "dlavie"; dst.mkdir(parents=True, exist_ok=True)
+caustics.save(dst / "derivative_caustics.png", optimize=True)
+(tex / "textures_list.json").write_text('[\n  "textures/dlavie/derivative_caustics"\n]\n', encoding="utf-8")
+
+# Environment textures are also written at pack root. Some Bedrock render paths resolve
+# these canonical locations directly even when visual JSON comes from a subpack.
+root_env = ROOT / "textures" / "environment"; root_env.mkdir(parents=True, exist_ok=True)
+hi = ROOT / "subpacks" / "high" / "textures" / "environment"
+for name in ("clouds.png","sun.png","moon_phases.png"):
+    (root_env/name).write_bytes((hi/name).read_bytes())
+print("Generated DLavie Visual runtime assets (60-frame caustics + Derivative-profile cirrus)")

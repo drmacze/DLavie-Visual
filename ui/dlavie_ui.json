@@ -1,0 +1,58 @@
+{
+  "namespace": "dlavie",
+  "home_brand": {
+    "type": "panel",
+    "size": [280, 30],
+    "anchor_from": "top_middle",
+    "anchor_to": "top_middle",
+    "offset": [0, 104],
+    "layer": 50,
+    "controls": [
+      {
+        "shadow": {
+          "type": "label",
+          "text": "DLAVIE VISUAL",
+          "font_type": "smooth",
+          "font_size": "large",
+          "font_scale_factor": 0.78,
+          "color": [0.02, 0.07, 0.10],
+          "alpha": 0.85,
+          "anchor_from": "center",
+          "anchor_to": "center",
+          "offset": [1, 2],
+          "text_alignment": "center"
+        }
+      },
+      {
+        "brand": {
+          "type": "label",
+          "text": "DLAVIE VISUAL",
+          "font_type": "smooth",
+          "font_size": "large",
+          "font_scale_factor": 0.78,
+          "color": [0.35, 0.86, 1.0],
+          "anchor_from": "center",
+          "anchor_to": "center",
+          "offset": [0, 0],
+          "text_alignment": "center",
+          "shadow": true
+        }
+      },
+      {
+        "edition": {
+          "type": "label",
+          "text": "DERIVATIVE EDITION",
+          "font_type": "smooth",
+          "font_size": "small",
+          "font_scale_factor": 0.58,
+          "color": [0.78, 0.86, 0.91],
+          "alpha": 0.9,
+          "anchor_from": "bottom_middle",
+          "anchor_to": "bottom_middle",
+          "offset": [0, 9],
+          "text_alignment": "center"
+        }
+      }
+    ]
+  }
+}
