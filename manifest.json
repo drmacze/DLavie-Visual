@@ -2,23 +2,23 @@
   "format_version": 2,
   "header": {
     "name": "DLavie Visual",
-    "description": "DLavie Visual 2.2 • Derivative-focused atmosphere, water & lighting • Low / Medium / High",
+    "description": "DLavie Visual 2.3 • Cinematic Derivative-style godrays, water, fog & night • Low / Medium / High",
     "uuid": "59261ff1-d2af-41da-a66e-5065854861b2",
-    "version": [2, 2, 0],
+    "version": [2, 3, 0],
     "min_engine_version": [1, 26, 40]
   },
   "modules": [
     {
       "type": "resources",
       "uuid": "435b96ed-3dbb-45cf-9cd9-33d9bf958870",
-      "version": [2, 2, 0]
+      "version": [2, 3, 0]
     }
   ],
   "capabilities": ["pbr"],
   "subpacks": [
     {"folder_name": "low", "name": "Low • Mobile Performance", "memory_tier": 1},
     {"folder_name": "medium", "name": "Medium • Balanced", "memory_tier": 1},
-    {"folder_name": "high", "name": "High • Visual Quality", "memory_tier": 1}
+    {"folder_name": "high", "name": "High • Cinematic", "memory_tier": 1}
   ],
   "metadata": {
     "authors": ["DLavie", "DC Team / Derivative authors (source reference)"],
