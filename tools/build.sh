@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# Generated resources are rebuilt from source every time; remove stale files from older schema/layout versions.
+rm -rf biomes subpacks textures pack_icon.png
 python3 tools/generate_configs.py
 python3 tools/generate_assets.py
 python3 tools/validate_pack.py
@@ -11,7 +13,7 @@ from pathlib import Path
 from zipfile import ZipFile, ZIP_DEFLATED
 root=Path('.')
 out=root/'dist'/'DLavie-Visual.mcpack'
-exclude={'dist','.git','__pycache__','docs','THIRD_PARTY_LICENSES','branding','tools','.github','config'}
+exclude={'dist','.git','__pycache__','docs','THIRD_PARTY_LICENSES','branding','tools','.github','config','third_party_runtime'}
 with ZipFile(out,'w',ZIP_DEFLATED,compresslevel=9) as z:
     for p in sorted(root.rglob('*')):
         if not p.is_file(): continue

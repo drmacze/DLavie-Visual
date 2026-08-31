@@ -1,0 +1,14 @@
+{
+  "namespace": "start",
+  "start_screen_content": {
+    "modifications": [
+      {
+        "array_name": "controls",
+        "operation": "insert_front",
+        "value": [
+          { "dlavie_home_brand@dlavie.home_brand": {} }
+        ]
+      }
+    ]
+  }
+}
