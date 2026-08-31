@@ -17,10 +17,10 @@ were mapped to Bedrock-supported equivalents:
 |---|---|
 | Atmospheric LUT / sky scattering | Vibrant Visuals atmosphere keyframes, Rayleigh/Mie tuning |
 | Volumetric fog / light shafts | Bedrock volumetric fog density + media coefficients |
-| Volumetric / planar cloud look | animated vanilla cloud pipeline + custom density/cloud texture + atmospheric scattering |
+| Derivative cirrus profile | planar cirrus density texture + atmosphere scattering; the Derivative profile disables volumetric clouds |
 | Direct sun/moon lighting | keyframed directional lighting |
 | Rough reflections / SSR intent | Vibrant Visuals PBR roughness/metalness + engine reflections; water reflections remain engine-managed |
-| Physics ocean / caustics | configurable Bedrock wave octaves, shape, pull, speed, caustics |
+| Physics ocean / caustics | source-aligned wave speed/height + multi-octave Bedrock waves + original Derivative 60-frame caustics atlas when supplied at build time |
 | Color grading / white balance | Vibrant Visuals grading, saturation, contrast, ~7000K white balance |
 | Bloom/exposure intent | HDR/tone-mapping-friendly grading; final bloom/exposure stays renderer controlled |
 | PBR materials | global MERS fallback so vanilla/third-party non-PBR textures still react plausibly to deferred lighting |
@@ -29,17 +29,23 @@ A literal GLSL 1:1 port is not technically possible on retail Bedrock because
 Iris/OptiFine compute/fragment shader entry points are not exposed by RenderDragon.
 This repository therefore targets **visual equivalence**, not byte/code equivalence.
 
+## Pass 2 visual reconstruction
+
+This pass follows the actual `Profile.Derivative` anchors instead of generic shader assumptions: 7000 K white balance, saturation 1.0, volumetric fog/light intent, planar cirrus mode, source-aligned water wave speed/height 1.0, warm ~3000 K local lights, and a clear-day physical sun scale. Medium/High also use a 60-frame 128px Bedrock caustics atlas. Nether and End now receive dedicated atmosphere, fog, grading and lighting instead of inheriting Overworld values.
+
+### 2.3 cinematic rebuild
+
+The 2.3 pass is calibrated toward the supplied Derivative gallery targets: stronger low-sun Mie scattering and light shafts, deep indoor contrast, calmer reflective water, original Derivative caustics when the supplied source asset is present, clearer turquoise underwater absorption, denser humid-biome fog, darker nights with warmer local lights, and custom rain/cirrus environment textures. It also uses separate clear-ocean, river, swamp and frozen-water profiles rather than one universal water definition.
+
 ## Presets
 
 | Preset | Intended device | Main cost controls |
 |---|---|---|
-| **Low** | iPhone 11 while recording / supported lower-end Android | blocky shadows, 8 water octaves, reduced caustics, reduced point-light map, 64px environment assets |
-| **Medium** | **iPhone 11 recommended** | balanced shadows, 16 water octaves + caustics, core point lights, 128px environment assets |
-| **High** | newer iPhone/iPad / stronger Android | soft shadows, 28 water octaves, stronger caustics, broader point lights, 256px environment assets |
+| **Low** | iPhone 11 while recording / supported lower-end Android | blocky shadows, 6 water octaves, restrained fog, caustics off |
+| **Medium** | **iPhone 11 recommended** | soft shadows, 10 water octaves + 60-frame caustics, cinematic fog/rays |
+| **High** | newer iPhone/iPad / stronger Android | soft 8-texel shadows, 14 water octaves, strongest Mie/fog contrast, stronger caustics |
 
-Legacy manifest `memory_tier` thresholds are deliberately spaced so a 4 GB-class
-mobile device is more likely to land on Medium rather than High when Bedrock
-auto-selects a compatible subpack.
+All three subpacks use a permissive retail `memory_tier` gate so supported mobile devices can select Low, Medium, or High manually. Performance differences are controlled by the actual shadow, water, fog, and caustics costs rather than by locking the menu.
 
 ## PBR + other texture packs
 
