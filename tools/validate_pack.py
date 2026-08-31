@@ -10,7 +10,7 @@ def load(p):
 
 m=load('manifest.json')
 if m.get('format_version')!=2:err('manifest format_version must be 2')
-if m.get('header',{}).get('version')!=[4,4,0]:err('expected version 4.4.0')
+if m.get('header',{}).get('version')!=[4,5,0]:err('expected version 4.5.0')
 if m.get('header',{}).get('min_engine_version',[])<[1,26,40]:err('min engine must be >=1.26.40')
 if 'pbr' not in m.get('capabilities',[]):err('pbr capability missing')
 expected=[f'{t}_{q}' for t in ('natural','cozy','gloomy') for q in ('low','medium','high')]
@@ -27,6 +27,22 @@ ore_hooks={
  'minecraft:diamond_ore','minecraft:deepslate_diamond_ore','minecraft:emerald_ore','minecraft:deepslate_emerald_ore',
  'minecraft:nether_gold_ore','minecraft:nether_quartz_ore','minecraft:ancient_debris'
 }
+roughness={
+ 'blocks':{'low':248,'medium':243,'high':238},
+ 'actors':{'low':248,'medium':244,'high':240},
+ 'particles':{'low':252,'medium':250,'high':248},
+ 'items':{'low':238,'medium':231,'high':224},
+}
+day_sky={
+ 'natural':{'low':.56,'medium':.64,'high':.72},
+ 'cozy':{'low':.52,'medium':.60,'high':.68},
+ 'gloomy':{'low':.44,'medium':.50,'high':.56},
+}
+night_sky={
+ 'natural':{'low':.10,'medium':.12,'high':.14},
+ 'cozy':{'low':.10,'medium':.11,'high':.13},
+ 'gloomy':{'low':.10,'medium':.10,'high':.11},
+}
 for pre in expected:
     theme,quality=pre.rsplit('_',1)
     for v in profiles:
@@ -39,6 +55,17 @@ for pre in expected:
         if not (ROOT/p).is_file():err('missing '+str(p))
         else:load(p)
 
+    # PBR fallback stays neutral/rough so external Texture Sets own the material response.
+    pbr_rel=Path('subpacks')/pre/'pbr/global.json'
+    pbro=load(pbr_rel)
+    if pbro.get('format_version')!='1.21.40':err(f'{pbr_rel}: expected PBR fallback schema 1.21.40')
+    pf=pbro.get('minecraft:pbr_fallback_settings',{})
+    for group in ('blocks','actors','particles','items'):
+        vals=pf.get(group,{}).get('global_metalness_emissive_roughness_subsurface')
+        if not isinstance(vals,list) or len(vals)!=4:err(f'{pbr_rel}: malformed {group} MERS fallback');continue
+        if any(float(vals[i])!=0 for i in (0,1,3)):err(f'{pbr_rel}: {group} fallback must not fake metal/emissive/subsurface')
+        if int(vals[2])!=roughness[group][quality]:err(f'{pbr_rel}: {group} roughness fallback expected {roughness[group][quality]}, got {vals[2]}')
+
     # Overworld lighting uses schema 1.26.0 so ambient/sky time keyframes are formally supported.
     for lp in (ROOT/'subpacks'/pre/'lighting').glob('*.json'):
         if lp.stem in ('nether','end'): continue
@@ -50,7 +77,10 @@ for pre in expected:
         if not isinstance(amb,dict) or '0.50' not in amb:err(f'{rel}: missing midnight ambient keyframe')
         elif float(amb['0.50'])>0.012:err(f'{rel}: midnight ambient too bright')
         if not isinstance(sky,dict) or '0.50' not in sky:err(f'{rel}: missing midnight sky keyframe')
-        elif float(sky['0.50'])>0.20:err(f'{rel}: midnight sky too bright')
+        elif abs(float(sky['0.50'])-night_sky[theme][quality])>.0001:err(f'{rel}: midnight sky not PBR calibrated')
+        if isinstance(sky,dict) and '0.0' in sky and abs(float(sky['0.0'])-day_sky[theme][quality])>.0001:err(f'{rel}: daytime sky IBL not PBR calibrated')
+        desat=float(ls.get('emissive',{}).get('desaturation',1))
+        if desat>0.031:err(f'{rel}: emissive desaturation too high for PBR color fidelity')
 
     for ap in (ROOT/'subpacks'/pre/'atmospherics').glob('*.json'):
         if ap.stem in ('nether','end'): continue
@@ -114,13 +144,13 @@ for pre in expected:
             if ll.get(b,{}).get('light_type')!='point_light':err(f'{pre}: high ore hook {b} must be point_light')
     if len(list((ROOT/'subpacks'/pre/'biomes').glob('*.client_biome.json')))<87:err(f'{pre}: missing theme-specific biome bindings')
 
-# Shader/visual-only project boundary.
+# Shader/visual-only project boundary. External PBR packs own their own Texture Sets.
 block_dir=ROOT/'textures'/'blocks'
 if block_dir.exists() and any(block_dir.iterdir()):err('visual project contains custom block textures')
 sets=list(ROOT.rglob('*.texture_set.json'))
 if sets:err(f'visual project contains {len(sets)} Texture Sets; move them to the texture project')
 if (ROOT/'tools'/'generate_material_suite.py').exists():err('block material generator still exists in visual project')
-for tool in ('enhance_weather_water.py','enhance_underwater_night.py'):
+for tool in ('enhance_weather_water.py','enhance_underwater_night.py','enhance_pbr_compat.py'):
     if not (ROOT/'tools'/tool).is_file():err('missing '+tool)
 
 ca=ROOT/'textures/dlavie/optical_caustics.png'
@@ -133,4 +163,4 @@ for rel in ('ui/_ui_defs.json','ui/dlavie_ui.json','ui/start_screen.json','brand
     if not (ROOT/rel).is_file():err('missing '+rel)
 if errors:
     print('VALIDATION FAILED');[print(' -',e) for e in errors];sys.exit(1)
-print('Validation OK: DLavie Visual 4.4 visual core, advanced underwater shafts/caustics + 1.26.0 cinematic night keyframes + ore light hooks, 9 presets, zero block textures')
+print('Validation OK: DLavie Visual 4.5 visual core, PBR-friendly IBL/reflections + neutral fallbacks, advanced underwater/night/weather, 9 presets, zero block Texture Sets')
