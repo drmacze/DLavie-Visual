@@ -2,72 +2,53 @@
 
 ![DLavie Visual cover](branding/cover.svg)
 
-**DLavie Visual** is a Minecraft Bedrock **Vibrant Visuals + PBR** resource pack
-for the 26.x renderer line, with **Bedrock 26.45** as the primary target and
-**1.26.40** as the manifest compatibility floor. It is built for supported
-iPhone/iPad and Android hardware, with **iPhone 11 (A13)** as the minimum iPhone
-performance target.
+**DLavie Visual** is a Minecraft Bedrock **Vibrant Visuals + PBR** resource pack for the 26.x renderer line, with **Bedrock 26.45** as the primary target and **1.26.40** as the manifest compatibility floor. It targets supported iPhone/iPad and Android hardware, with iPhone 11 (A13) as the minimum iPhone performance baseline.
 
-## What is ported
+## Rendering approach
 
-The uploaded Derivative 25.1.0 Java shader was audited and its visual priorities
-were mapped to Bedrock-supported equivalents:
+The supplied Derivative 25.1.0 Java shader was audited and its visual priorities were mapped to Bedrock-supported systems: atmosphere scattering, keyframed sun/moon lighting, volumetric fog media, biome-specific grading, local lights, PBR fallback response, water waves/absorption and a 60-frame Derivative caustics atlas when the source asset is present.
 
-| Derivative feature | DLavie Visual / Bedrock equivalent |
-|---|---|
-| Atmospheric LUT / sky scattering | Vibrant Visuals atmosphere keyframes, Rayleigh/Mie tuning |
-| Volumetric fog / light shafts | Bedrock volumetric fog density + media coefficients |
-| Derivative cirrus profile | planar cirrus density texture + atmosphere scattering; the Derivative profile disables volumetric clouds |
-| Direct sun/moon lighting | keyframed directional lighting |
-| Rough reflections / SSR intent | Vibrant Visuals PBR roughness/metalness + engine reflections; water reflections remain engine-managed |
-| Physics ocean / caustics | source-aligned wave speed/height + multi-octave Bedrock waves + original Derivative 60-frame caustics atlas when supplied at build time |
-| Color grading / white balance | Vibrant Visuals grading, saturation, contrast, ~7000K white balance |
-| Bloom/exposure intent | HDR/tone-mapping-friendly grading; final bloom/exposure stays renderer controlled |
-| PBR materials | global MERS fallback so vanilla/third-party non-PBR textures still react plausibly to deferred lighting |
+A literal Iris/OptiFine GLSL port is not possible on retail Bedrock because those shader entry points are not exposed by RenderDragon. DLavie therefore targets visual reconstruction through the supported Vibrant Visuals/deferred pipeline.
 
-A literal GLSL 1:1 port is not technically possible on retail Bedrock because
-Iris/OptiFine compute/fragment shader entry points are not exposed by RenderDragon.
-This repository therefore targets **visual equivalence**, not byte/code equivalence.
+## 3.0.1 PBR compatibility hotfix
 
-## Pass 2 visual reconstruction
+3.0.0 introduced metadata-only per-block `*.texture_set.json` files. That was incorrect for Bedrock: every Texture Set requires a `color` layer, and referenced texture images must exist in the same resource pack as the Texture Set definition. On device this produced the magenta/black missing-texture checkerboard.
 
-This pass follows the actual `Profile.Derivative` anchors instead of generic shader assumptions: 7000 K white balance, saturation 1.0, volumetric fog/light intent, planar cirrus mode, source-aligned water wave speed/height 1.0, warm ~3000 K local lights, and a clear-day physical sun scale. Medium/High also use a 60-frame 128px Bedrock caustics atlas. Nether and End now receive dedicated atmosphere, fog, grading and lighting instead of inheriting Overworld values.
+3.0.1 removes those invalid block Texture Sets completely. DLavie core now leaves block albedo and per-texture PBR ownership to vanilla or the active texture pack and applies its art direction through `pbr/global.json`, biome lighting, atmosphere, fog, water, shadows and local lights. The validator now rejects Texture Sets without a valid same-pack color layer so this regression cannot pass CI again.
 
-### 2.3 cinematic rebuild
+See [docs/PBR_COMPATIBILITY.md](docs/PBR_COMPATIBILITY.md) for the resource-stack policy.
 
-The 2.3 pass is calibrated toward the supplied Derivative gallery targets: stronger low-sun Mie scattering and light shafts, deep indoor contrast, calmer reflective water, original Derivative caustics when the supplied source asset is present, clearer turquoise underwater absorption, denser humid-biome fog, darker nights with warmer local lights, and custom rain/cirrus environment textures. It also uses separate clear-ocean, river, swamp and frozen-water profiles rather than one universal water definition.
+## Custom lighting architecture
+
+DLavie uses eight Overworld render profiles: default, forest, dense forest/jungle, dry/desert, cold/snow, swamp, cave/deep-dark and ocean. Each profile can use its own lighting, atmosphere, color grading and fog. The 3.x lighting scale is calibrated to the current Bedrock Vibrant Visuals resource-pack scale rather than the incorrect 1000x values used in the earlier pass.
+
+Medium and High also expand local-light mappings for torches, lanterns, glowstone, sea lanterns, froglights, redstone lamps, campfires, soul lights and other light-emitting blocks. Low keeps the cheaper path for mobile performance.
 
 ## Presets
 
 | Preset | Intended device | Main cost controls |
 |---|---|---|
 | **Low** | iPhone 11 while recording / supported lower-end Android | blocky shadows, 6 water octaves, restrained fog, caustics off |
-| **Medium** | **iPhone 11 recommended** | soft shadows, 10 water octaves + 60-frame caustics, cinematic fog/rays |
-| **High** | newer iPhone/iPad / stronger Android | soft 8-texel shadows, 14 water octaves, strongest Mie/fog contrast, stronger caustics |
+| **Medium** | **iPhone 11 recommended** | soft shadows, 10 water octaves + caustics, balanced fog/local lights |
+| **High** | newer iPhone/iPad / stronger Android | soft 8-texel shadows, 14 water octaves, strongest atmosphere/local-light pass |
 
-All three subpacks use a permissive retail `memory_tier` gate so supported mobile devices can select Low, Medium, or High manually. Performance differences are controlled by the actual shadow, water, fog, and caustics costs rather than by locking the menu.
+All three subpacks remain manually selectable on supported mobile hardware.
 
 ## PBR + other texture packs
 
-DLavie Visual does not redistribute Mojang's vanilla block textures. Instead it
-provides PBR fallback material values. A compatible PBR texture pack lower in the
-resource stack can still supply its own texture sets; where no texture set exists,
-DLavie's fallback roughness is used.
+DLavie Visual does not redistribute Mojang block albedo textures and does not attempt to attach metadata-only Texture Sets to textures owned by another pack. This is intentional: Bedrock Texture Sets do not merge across the resource stack and their referenced images must live in the same resource pack.
+
+A Vibrant-Visuals/PBR-aware texture pack can therefore supply its own valid Texture Sets, while textures with no specific PBR data receive DLavie's global fallback material response. This is the safe path for vanilla/third-party texture compatibility.
 
 ## Installation
 
 1. Build or download `DLavie-Visual.mcpack`.
 2. Open it with Minecraft.
 3. Enable **DLavie Visual** in Global Resources or the world resource packs.
-4. Open the pack's gear icon and select Low, Medium, or High.
-5. In **Settings → Video**, select **Vibrant Visuals** when the device supports it.
+4. Use the pack gear icon to select Low, Medium or High.
+5. In **Settings → Video**, select **Vibrant Visuals** on supported hardware.
 
-### iPhone 11 baseline
-
-Start with **Medium**, render distance around **8–12 chunks**, and the game's
-performance-biased Vibrant Visuals quality option. If the phone thermally throttles
-or you are screen-recording, use **Low**. High is intentionally not the iPhone 11
-baseline.
+For iPhone 11, start with Medium and roughly 8–12 chunks. Use Low while screen recording or if thermal throttling becomes noticeable.
 
 ## Build
 
@@ -78,28 +59,12 @@ python3 -m pip install Pillow
 ./tools/build.sh
 ```
 
-The output is `dist/DLavie-Visual.mcpack`.
-
-Validation only:
-
-```bash
-python3 tools/generate_configs.py
-python3 tools/generate_assets.py
-python3 tools/validate_pack.py
-```
+The output is `dist/DLavie-Visual.mcpack`. The build regenerates configs/assets, clears unsafe stale block Texture Sets and runs structural/regression validation.
 
 ## Source / license compliance
 
-The supplied Derivative source is licensed under **DERCODE License Agreement 2.5**.
-The license is preserved verbatim and required original authors are credited in
-[SOURCE_ATTRIBUTION.md](SOURCE_ATTRIBUTION.md). The original project and DC/Derivative
-Discord are linked there as required for publication under the DLavie Visual name.
+The supplied Derivative source is licensed under **DERCODE License Agreement 2.5**. The license is preserved verbatim and required original authors are credited in [SOURCE_ATTRIBUTION.md](SOURCE_ATTRIBUTION.md).
 
 ## Compatibility statement
 
-The pack uses official Bedrock resource-pack/Vibrant Visuals interfaces rather than
-injectors, patched APK/IPAs, or RenderDragon hacks. That is the most update-resilient
-path for both iOS and Android. Repository validation can confirm structure and data,
-but no repository build can truthfully certify 100% FPS/stability across every
-Android GPU, OS build, thermal state, world, and render distance; device testing is
-still required before a public “100% tested” claim.
+DLavie uses official Bedrock resource-pack/Vibrant Visuals interfaces rather than injectors, patched APK/IPAs or RenderDragon hacks. Repository validation can verify pack structure and data, but physical device testing is still required for final visual calibration, thermals and FPS claims.
