@@ -11,7 +11,6 @@ ROOT = Path(__file__).resolve().parents[1]
 THEMES = ("natural", "cozy", "gloomy")
 QUALITIES = ("low", "medium", "high")
 PROFILES = ("default", "forest", "dense", "dry", "cold", "swamp", "cave", "ocean")
-
 Q = {"low": 0, "medium": 1, "high": 2}
 
 WATER_MEDIA = {
@@ -57,16 +56,18 @@ def patch_fog(path, theme, quality):
     o = load(path)
     fg = o.get("minecraft:fog_settings")
     if not fg: return
+    stem = path.stem
     name = profile_name(path)
     wi = WATER_MEDIA[name]
     wa = WEATHER[name]
     qr = Q[quality]
     theme_weather = {"natural":1.00,"cozy":.96,"gloomy":1.22}[theme]
     quality_weather = [0.78,1.00,1.14][qr]
-    weather_density = wa["fog"] * theme_weather * quality_weather
+    weather_density = 0.0 if stem in ("cave","nether","end") else wa["fog"] * theme_weather * quality_weather
     vol = fg.setdefault("volumetric", {})
     density = vol.setdefault("density", {})
-    # Weather density activates only during active weather. Cave profiles deliberately skip it.
+
+    # The weather density channel is only evaluated during active rain/snow.
     if weather_density > 0:
         air = density.get("air", {})
         zero_h = float(air.get("zero_density_height", 172.0)) + 26.0
@@ -79,7 +80,7 @@ def patch_fog(path, theme, quality):
     else:
         density.pop("weather", None)
 
-    # Depth absorption / underwater medium. Higher quality gets stronger forward scattering shafts.
+    # Depth absorption / underwater medium. High gets stronger forward scattering shafts.
     water_density = density.setdefault("water", {"max_density": .22, "uniform": True})
     water_density["max_density"] = round(min(.55, float(water_density.get("max_density",.22))*[.92,1.00,1.06][qr]), 6)
     water_density["uniform"] = True
@@ -95,10 +96,10 @@ def patch_fog(path, theme, quality):
 
     hg = vol.setdefault("henyey_greenstein_g", {})
     hg.setdefault("air", {"henyey_greenstein_g": .78})
-    water_g = max(-.98, min(.98, wi["g"] + [ -.06, 0.0, .05][qr]))
+    water_g = max(-.98, min(.98, wi["g"] + [-.06, 0.0, .05][qr]))
     hg["water"] = {"henyey_greenstein_g": round(water_g, 4)}
 
-    # Smooth underwater entry + depth fade. This avoids the instant flat color cut when diving.
+    # Smooth underwater entry + depth fade avoids an instant flat-color snap while diving.
     distance = fg.setdefault("distance", {})
     end = wi["end"] * [0.82, 1.0, 1.16][qr]
     distance["water"] = {
@@ -122,6 +123,8 @@ def patch_fog(path, theme, quality):
             "fog_color": base_color,
             "render_distance_type": "render",
         }
+    else:
+        distance.pop("weather", None)
     save(path, o)
 
 def patch_water(path, theme, quality):
@@ -145,20 +148,20 @@ def patch_water(path, theme, quality):
         "direction_increment":71.0,
     })
     ws["biome_water_color_contribution"]=p["color"]
+    # Low keeps caustics at power 1 rather than disabling them entirely; quality scales cost/intensity.
     ca=ws.setdefault("caustics",{})
-    if ca.get("enabled", True):
-        ca.update({
-            "enabled":True,
-            "texture":"textures/dlavie/optical_caustics",
-            "frame_length":[.058,.048,.041][qr],
-            "scale": [0.72,0.60,0.52][qr] if kind!="swamp" else [0.86,0.74,0.66][qr],
-            "power": [1,2,3][qr] if theme!="gloomy" else [1,2,2][qr],
-        })
+    ca.update({
+        "enabled":True,
+        "texture":"textures/dlavie/optical_caustics",
+        "frame_length":[.058,.048,.041][qr],
+        "scale": [0.72,0.60,0.52][qr] if kind!="swamp" else [0.86,0.74,0.66][qr],
+        "power": [1,2,3][qr] if theme!="gloomy" else [1,2,2][qr],
+    })
     save(path,o)
 
 def patch_atmosphere(path, theme, quality):
-    # Cloud optical media is handled in fog JSON. Here we slightly restrain clear-sky glare in gloomy
-    # presets so overcast weather reads darker instead of simply blooming brighter.
+    # Cloud optical media is handled in fog JSON. Restrain clear-sky glare in Gloomy so storms
+    # read darker rather than simply blooming brighter.
     o=load(path); at=o.get("minecraft:atmosphere_settings")
     if not at:return
     if theme=="gloomy" and isinstance(at.get("sun_glare_shape"),dict):
