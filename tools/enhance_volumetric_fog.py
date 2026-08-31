@@ -30,11 +30,11 @@ def patch(path,theme,quality):
  if not fg:return
  kind=path.stem if path.stem in P else 'default'; z,mh,wm,ag,wg,hs,rs,hc,rc=P[kind]; qi={'low':0,'medium':1,'high':2}[quality]
  o['format_version']='1.21.90'; vol=fg.setdefault('volumetric',{}); den=vol.setdefault('density',{}); air=den.setdefault('air',{'max_density':.006})
- cur=max(.0001,float(air.get('max_density',.006))); cur=min(.060,cur*[.92,1,1.06][qi])
+ cur=max(.0001,float(air.get('max_density',.006))); cap=.045 if kind in ('nether','end') else .036; cur=min(cap,cur*[.92,1,1.06][qi])
  if z is None: air.clear(); air.update({'max_density':round(cur,6),'uniform':True})
  else: air.pop('uniform',None); air.update({'max_density':round(cur,6),'zero_density_height':float(z),'max_density_height':float(mh)})
  if kind not in ('nether','end','cave'):
-  tf={'natural':1,'cozy':1.05,'gloomy':1.20}[theme]; den['weather']={'max_density':round(min(.080,cur*wm*tf),6),'zero_density_height':float(z+28),'max_density_height':float(mh+8)}
+  tf={'natural':1,'cozy':1.05,'gloomy':1.20}[theme]; den['weather']={'max_density':round(min(.048,cur*wm*tf),6),'zero_density_height':float(z+28),'max_density_height':float(mh+8)}
  else: den.pop('weather',None)
  water=den.setdefault('water',{'max_density':.22,'uniform':True}); water['uniform']=True; water['max_density']=round(min(.58,max(.08,float(water.get('max_density',.22)))),6)
  media=vol.setdefault('media_coefficients',{}); am=media.setdefault('air',{}); sf=[.92,1,1.07][qi]
