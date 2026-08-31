@@ -1,0 +1,8 @@
+{
+  "name": "DLavie Visual",
+  "version": [4, 5, 1],
+  "version_string": "4.5.1",
+  "target_bedrock": "26.45",
+  "min_engine_version": [1, 26, 40],
+  "description": "DLavie Visual 4.5.1 • audited visual core • PBR pack compatibility + underwater/night/weather • no block textures"
+}
