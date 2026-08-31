@@ -18,6 +18,16 @@ QUALITIES = ("low", "medium", "high")
 SUBPACKS = tuple(f"{t}_{q}" for t in THEMES for q in QUALITIES)
 PROFILES = ("default", "forest", "dense", "dry", "cold", "swamp", "cave", "ocean")
 WATER_KINDS = ("default", "river", "ocean", "swamp", "frozen")
+DEFERRED_SAMPLE_WIDTH = {"low": .18, "medium": .13, "high": .09}
+DEFERRED_REQUIRED_LIGHTS = {
+    "minecraft:torch", "minecraft:lantern", "minecraft:fire", "minecraft:campfire",
+    "minecraft:glowstone", "minecraft:sea_lantern", "minecraft:soul_torch", "minecraft:soul_lantern",
+    "minecraft:redstone_torch", "minecraft:lit_redstone_lamp", "minecraft:lava", "minecraft:flowing_lava",
+    "minecraft:shroomlight", "minecraft:end_rod", "minecraft:beacon", "minecraft:conduit",
+    "minecraft:copper_torch", "minecraft:copper_lantern", "minecraft:copper_bulb",
+    "minecraft:oxidized_copper_lantern", "minecraft:firefly_bush", "minecraft:creaking_heart",
+    "minecraft:white_candle", "minecraft:white_candle_cake",
+}
 errors: list[str] = []
 
 
@@ -121,6 +131,11 @@ def main() -> None:
             waves = ws.get("waves", {})
             if not waves.get("enabled") or int(waves.get("octaves", 0)) < min_octaves:
                 err(f"{path.relative_to(ROOT)}: wave quality regressed")
+            sample_width = waves.get("sampleWidth")
+            if sample_width is None or abs(float(sample_width) - DEFERRED_SAMPLE_WIDTH[quality]) > 1e-6:
+                err(f"{path.relative_to(ROOT)}: deferred water sampleWidth missing/stale ({sample_width})")
+            if not 0.01 <= float(sample_width or 0) <= 1.0:
+                err(f"{path.relative_to(ROOT)}: deferred sampleWidth outside schema range")
             caustics = ws.get("caustics", {})
             if not caustics.get("enabled") or caustics.get("texture") != "textures/dlavie/optical_caustics":
                 err(f"{path.relative_to(ROOT)}: optical caustics not active")
@@ -135,13 +150,31 @@ def main() -> None:
         ll_path = root / "local_lighting" / "local_lighting.json"
         if not ll_path.is_file():
             err(f"missing {ll_path.relative_to(ROOT)}")
+        else:
+            ll_obj = load(ll_path)
+            ll = ll_obj.get("minecraft:local_light_settings", {})
+            if ll_obj.get("format_version") != "1.21.120":
+                err(f"{ll_path.relative_to(ROOT)}: local-light schema must be 1.21.120")
+            if len(ll) < 100:
+                err(f"{ll_path.relative_to(ROOT)}: deferred colored-light coverage too small ({len(ll)})")
+            missing = DEFERRED_REQUIRED_LIGHTS - set(ll)
+            if missing:
+                err(f"{ll_path.relative_to(ROOT)}: missing deferred lights {sorted(missing)}")
+            if quality == "high":
+                for block in ("minecraft:torch", "minecraft:lantern", "minecraft:soul_torch", "minecraft:end_rod", "minecraft:copper_torch", "minecraft:white_candle"):
+                    if ll.get(block, {}).get("light_type") != "point_light":
+                        err(f"{ll_path.relative_to(ROOT)}: High deferred point light missing for {block}")
+            if quality == "low":
+                if ll.get("minecraft:white_candle", {}).get("light_type") != "static_light":
+                    err(f"{ll_path.relative_to(ROOT)}: Low candle must stay static for mobile performance")
+
         shadow_path = root / "shadows" / "global.json"
         if not shadow_path.is_file():
             err(f"missing {shadow_path.relative_to(ROOT)}")
         if len(list((root / "biomes").glob("*.client_biome.json"))) < 87:
             err(f"subpacks/{sp}: biome bindings incomplete")
 
-    # 4.5.2 loader safety net. The root pack must be usable even if the client has
+    # Root loader safety net. The root pack must be usable even if the client has
     # not resolved a subpack yet. Reserved filenames follow Mojang's VV layout.
     root_required = (
         "atmospherics/atmospherics.json", "lighting/global.json",
@@ -180,6 +213,13 @@ def main() -> None:
                 elif ident not in root_regs[registry]:
                     err(f"{path.relative_to(ROOT)}: unresolved root failsafe {field}={ident}")
 
+    root_ll = load(ROOT / "local_lighting/local_lighting.json").get("minecraft:local_light_settings", {}) if (ROOT / "local_lighting/local_lighting.json").is_file() else {}
+    if len(root_ll) < 100 or DEFERRED_REQUIRED_LIGHTS - set(root_ll):
+        err("root deferred local-light failsafe is incomplete")
+    root_water = load(ROOT / "water/water.json").get("minecraft:water_settings", {}).get("waves", {}) if (ROOT / "water/water.json").is_file() else {}
+    if abs(float(root_water.get("sampleWidth", 0)) - DEFERRED_SAMPLE_WIDTH["medium"]) > 1e-6:
+        err("root deferred water sampleWidth does not match Natural-Medium")
+
     # Visual project boundary: material textures belong to the separate texture project.
     block_dir = ROOT / "textures" / "blocks"
     if block_dir.exists() and any(block_dir.iterdir()):
@@ -216,7 +256,7 @@ def main() -> None:
         for message in errors:
             print(" -", message)
         raise SystemExit(1)
-    print(f"Validation OK: DLavie Visual {release.get('version_string')} renderer, root loader failsafe and texture-project boundaries are clean")
+    print(f"Validation OK: DLavie Visual {release.get('version_string')} deferred/PBR renderer, root loader failsafe and texture-project boundaries are clean")
 
 
 if __name__ == "__main__":
