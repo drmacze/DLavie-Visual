@@ -10,7 +10,7 @@ def load(p):
 
 m=load('manifest.json')
 if m.get('format_version')!=2:err('manifest format_version must be 2')
-if m.get('header',{}).get('version')!=[4,2,0]:err('expected version 4.2.0')
+if m.get('header',{}).get('version')!=[4,3,0]:err('expected version 4.3.0')
 if m.get('header',{}).get('min_engine_version',[])<[1,26,40]:err('min engine must be >=1.26.40')
 if 'pbr' not in m.get('capabilities',[]):err('pbr capability missing')
 expected=[f'{t}_{q}' for t in ('natural','cozy','gloomy') for q in ('low','medium','high')]
@@ -30,6 +30,7 @@ for pre in expected:
         p=Path('subpacks')/pre/rel
         if not (ROOT/p).is_file():err('missing '+str(p))
         else:load(p)
+
     for fp in (ROOT/'subpacks'/pre/'fogs').glob('*.json'):
         rel=fp.relative_to(ROOT); fo=load(rel)
         if fo.get('format_version')!='1.21.90':err(f'{rel}: fog format must be 1.21.90')
@@ -39,7 +40,7 @@ for pre in expected:
         if not air.get('uniform') and fp.stem not in ('cave','nether','end'):
             if 'zero_density_height' not in air or 'max_density_height' not in air:err(f'{rel}: missing height-shaped air fog')
             elif float(air['zero_density_height'])<=float(air['max_density_height']):err(f'{rel}: invalid vertical fog gradient')
-        if fp.stem not in ('cave','nether','end') and 'weather' not in den:err(f'{rel}: missing weather volumetric density')
+        if fp.stem not in ('cave','nether','end') and 'weather' not in den:err(f'{rel}: missing active-weather volumetric density')
         media=vol.get('media_coefficients',{})
         if not all(x in media for x in ('air','water','cloud')):err(f'{rel}: missing air/water/cloud media coefficients')
         hg=vol.get('henyey_greenstein_g',{})
@@ -47,13 +48,27 @@ for pre in expected:
             g=hg.get(medium,{}).get('henyey_greenstein_g')
             if g is None:err(f'{rel}: missing {medium} Henyey-Greenstein phase value')
             elif not -1<=float(g)<=1:err(f'{rel}: {medium} phase value out of range')
-        if 'air' not in fg.get('distance',{}):err(f'{rel}: missing far-distance haze')
+        dist=fg.get('distance',{})
+        if 'air' not in dist:err(f'{rel}: missing far-distance haze')
+        water_dist=dist.get('water',{})
+        if not water_dist:err(f'{rel}: missing underwater depth fog')
+        elif 'transition_fog' not in water_dist:err(f'{rel}: missing smooth underwater transition fog')
+        if fp.stem not in ('cave','nether','end') and 'weather' not in dist:err(f'{rel}: missing active-weather distance haze')
+
     for wk in ('default','river','ocean','swamp','frozen'):
         p=Path('subpacks')/pre/f'water/{wk}.json'
         if not (ROOT/p).is_file():err('missing '+str(p));continue
         w=load(p).get('minecraft:water_settings',{})
+        pc=w.get('particle_concentrations',{})
+        if not all(x in pc for x in ('chlorophyll','suspended_sediment','cdom')):err(f'{p}: missing depth-absorption particle concentrations')
+        waves=w.get('waves',{})
+        if not waves.get('enabled'):err(f'{p}: waves disabled')
+        if int(waves.get('octaves',0))<6:err(f'{p}: insufficient wave octaves')
         ca=w.get('caustics',{})
-        if ca.get('enabled') and ca.get('texture')!='textures/dlavie/optical_caustics':err(f'{p}: not using optical caustics')
+        if not ca.get('enabled'):err(f'{p}: caustics disabled')
+        elif ca.get('texture')!='textures/dlavie/optical_caustics':err(f'{p}: not using optical caustics')
+        if float(ca.get('power',0))<1:err(f'{p}: caustics power invalid')
+
     li=load(Path('subpacks')/pre/'lighting/default.json').get('minecraft:lighting_settings',{})
     sun=li.get('directional_lights',{}).get('orbital',{}).get('sun',{}).get('illuminance',{})
     vals=[float(x) for x in sun.values()] if isinstance(sun,dict) else [float(sun or 0)]
@@ -65,11 +80,14 @@ for pre in expected:
     if len(ll)<12:err(f'{pre}: local-light coverage too small')
     if len(list((ROOT/'subpacks'/pre/'biomes').glob('*.client_biome.json')))<87:err(f'{pre}: missing theme-specific biome bindings')
 
+# Shader/visual-only project boundary.
 block_dir=ROOT/'textures'/'blocks'
 if block_dir.exists() and any(block_dir.iterdir()):err('visual project contains custom block textures')
 sets=list(ROOT.rglob('*.texture_set.json'))
 if sets:err(f'visual project contains {len(sets)} Texture Sets; move them to the texture project')
 if (ROOT/'tools'/'generate_material_suite.py').exists():err('block material generator still exists in visual project')
+if not (ROOT/'tools'/'enhance_weather_water.py').is_file():err('missing weather/water enhancement pass')
+
 ca=ROOT/'textures/dlavie/optical_caustics.png'
 if not ca.is_file():err('missing optical caustics')
 elif Image.open(ca).size!=(128,7680):err(f'optical caustics must be 128x7680, got {Image.open(ca).size}')
@@ -80,4 +98,4 @@ for rel in ('ui/_ui_defs.json','ui/dlavie_ui.json','ui/start_screen.json','brand
     if not (ROOT/rel).is_file():err('missing '+rel)
 if errors:
     print('VALIDATION FAILED');[print(' -',e) for e in errors];sys.exit(1)
-print('Validation OK: DLavie Visual 4.2 visual core, realistic height/weather volumetric fog + HG scattering, 9 presets, zero block textures')
+print('Validation OK: DLavie Visual 4.3 visual core, interactive weather fog/cloud media + advanced depth-absorbing water, 9 presets, zero block textures')
