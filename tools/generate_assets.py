@@ -1,143 +1,116 @@
 #!/usr/bin/env python3
-"""Generate deterministic DLavie Visual runtime assets. The cover is hand-authored SVG."""
+"""Generate DLavie Visual 2.3 runtime environment assets. No AI image generation."""
 from pathlib import Path
 import math
 from PIL import Image, ImageDraw, ImageFilter, ImageEnhance
+ROOT=Path(__file__).resolve().parents[1]
 
-ROOT = Path(__file__).resolve().parents[1]
-PRESETS = {"low": 128, "medium": 256, "high": 512}
+# Pack icon: simple procedural DL mark.
+im=Image.new('RGBA',(512,512),(8,17,31,255)); d=ImageDraw.Draw(im,'RGBA')
+d.ellipse((38,42,474,478),fill=(33,126,180,24)); d.ellipse((250,36,500,286),fill=(255,174,88,25))
+d.rounded_rectangle((102,94,180,418),20,fill=(232,246,252,245)); d.ellipse((135,94,416,418),fill=(232,246,252,245)); d.ellipse((203,165,349,348),fill=(9,26,47,255))
+im.save(ROOT/'pack_icon.png',optimize=True)
 
+# Canonical Bedrock environment texture sizes are deliberately used here for maximum compatibility.
+env=ROOT/'textures'/'environment'; env.mkdir(parents=True,exist_ok=True)
 
-def gradient(size):
-    w, h = size
-    im = Image.new("RGB", size)
-    p = im.load()
-    for y in range(h):
-        t = y / max(1, h - 1)
-        for x in range(w):
-            p[x, y] = (int(8 + 15 * (1 - t)), int(18 + 28 * (1 - t)), int(34 + 48 * (1 - t)))
-    return im
+# --- Sun: small crisp disc plus soft corona so it does not look like a giant square sprite. ---
+sz=32; sun=Image.new('RGBA',(sz,sz),(0,0,0,0)); px=sun.load(); c=(sz-1)/2
+for y in range(sz):
+    for x in range(sz):
+        r=math.hypot(x-c,y-c)
+        disc=max(0.0,min(1.0,(6.4-r)*2.4))
+        halo=max(0.0,min(1.0,(13.2-r)/7.0))**2.2
+        a=int(255*max(disc,halo*0.28))
+        if a:
+            t=min(1,r/13.2); px[x,y]=(255,int(247-20*t),int(205-48*t),a)
+sun.save(env/'sun.png',optimize=True)
 
+# --- Moon phases: 8 x 32px tiles in the canonical 128x64 atlas. ---
+tile=32; moon=Image.new('RGBA',(128,64),(0,0,0,0)); mp=moon.load(); cc=(tile-1)/2
+for phase in range(8):
+    ox=(phase%4)*tile; oy=(phase//4)*tile; term=math.cos(phase/8*math.tau)*0.78
+    for y in range(tile):
+        for x in range(tile):
+            dx=(x-cc)/(tile*.5); dy=(y-cc)/(tile*.5); rr=math.hypot(dx,dy)
+            if rr>1: continue
+            lit=(dx>=term) if phase<4 else (dx<=term)
+            edge=max(0,min(1,(1.01-rr)*15)); a=int(255*edge*(1 if lit else .12)); val=int(212+18*(1-rr))
+            mp[ox+x,oy+y]=(val,min(255,val+7),255,a)
+moon.save(env/'moon_phases.png',optimize=True)
 
-# Pack icon: procedural/vector-like mark. No AI image generation.
-im = gradient((512, 512)).convert("RGBA")
-d = ImageDraw.Draw(im, "RGBA")
-d.ellipse((74, 64, 438, 428), fill=(58, 187, 255, 24))
-d.rounded_rectangle((106, 96, 184, 418), 24, fill=(225, 245, 255, 240))
-d.ellipse((136, 96, 418, 418), fill=(225, 245, 255, 240))
-d.ellipse((202, 166, 347, 348), fill=(11, 28, 52, 255))
-d.ellipse((278, 40, 470, 232), fill=(255, 183, 101, 32))
-im = im.filter(ImageFilter.GaussianBlur(0.25))
-im.save(ROOT / "pack_icon.png", optimize=True)
+# --- Cirrus cloud field: thin diagonal filaments like Derivative's CIRRUS_CLOUDS=2 target. ---
+S=256; base=Image.new('L',(S,S),0); bp=base.load()
+for y in range(S):
+    v=y/S
+    for x in range(S):
+        u=x/S
+        # Long anisotropic waves plus smaller warped bands. Tiling-safe periodic functions only.
+        f1=math.sin((u*2.0+v*0.18)*math.tau + 0.8*math.sin(v*2.0*math.tau))
+        f2=math.sin((u*4.5-v*0.32)*math.tau + 1.1*math.sin((u+v)*1.5*math.tau))
+        f3=math.sin((u*9.0+v*0.55)*math.tau + 0.55*math.sin(v*5.0*math.tau))
+        f4=math.sin((u*17.0-v*1.1)*math.tau)
+        ridge=max(0,1-abs(f1)*1.75)**2.4 + .58*max(0,1-abs(f2)*2.1)**3 + .28*max(0,1-abs(f3)*2.4)**3.2 + .10*max(0,1-abs(f4)*2.7)**4
+        # Large gaps keep the sky readable.
+        mask=.58+.42*math.sin((u*.75+v*.45)*math.tau)
+        bp[x,y]=int(max(0,min(255,255*ridge*mask*.54)))
+base=base.filter(ImageFilter.GaussianBlur(1.15))
+# Horizontal stretch produces shader-like cirrus streaks rather than vanilla puffs.
+stretched=base.resize((512,128),Image.Resampling.BICUBIC).resize((256,256),Image.Resampling.BICUBIC)
+stretched=ImageEnhance.Contrast(stretched).enhance(1.28)
+cloud=Image.new('RGBA',(S,S),(239,244,248,0)); cloud.putalpha(stretched.point(lambda a:max(0,min(150,int(a*.78)))))
+cloud.save(env/'clouds.png',optimize=True)
 
+# --- Rain: fine long streaks with low opacity. 64x256 canonical texture. ---
+rain=Image.new('RGBA',(64,256),(0,0,0,0)); rd=ImageDraw.Draw(rain,'RGBA')
+for i in range(28):
+    x=(i*23+7)%64; y=(i*71+13)%256; length=36+(i*17)%82; alpha=48+(i*19)%55
+    rd.line((x,y,x-3,(y+length)%256),fill=(188,211,224,alpha),width=1)
+    if y+length>=256: rd.line((x,y-256,x-3,y+length-256),fill=(188,211,224,alpha),width=1)
+rain=rain.filter(ImageFilter.GaussianBlur(.35)); rain.save(env/'rain.png',optimize=True)
 
-# Derivative Profile.Derivative uses planar CIRRUS_CLOUDS=2 and disables volumetric clouds.
-# Build a deterministic wispy planar density field instead of shipping unusable Java 3D cloud LUT/noise data.
-BASE = 512
-seed = Image.new("L", (BASE, BASE))
-sp = seed.load()
-for y in range(BASE):
-    v = y / BASE
-    for x in range(BASE):
-        u = x / BASE
-        broad = (
-            math.sin(u * math.tau * 3.2 + math.sin(v * math.tau * 2.1) * 1.7)
-            + 0.62 * math.sin((u * 5.7 + v * 1.3) * math.tau)
-            + 0.37 * math.sin((u * 11.4 - v * 3.8) * math.tau + 1.9)
-            + 0.21 * math.sin((u * 23.1 + v * 7.2) * math.tau)
-        )
-        streak = 0.5 + 0.5 * math.sin((u * 7.0 + 0.13 * math.sin(v * math.tau * 4.0)) * math.tau)
-        value = 112 + broad * 34 + streak * 24
-        sp[x, y] = max(0, min(255, int(value)))
-seed = seed.filter(ImageFilter.GaussianBlur(2.4))
+# --- Snow: restrained flakes so VV fog remains the visual focus. ---
+snow=Image.new('RGBA',(64,256),(0,0,0,0)); sd=ImageDraw.Draw(snow,'RGBA')
+for i in range(42):
+    x=(i*37+5)%64; y=(i*53+19)%256; r=1+(i%3==0); a=75+(i*13)%85
+    sd.ellipse((x-r,y-r,x+r,y+r),fill=(238,247,255,a))
+snow=snow.filter(ImageFilter.GaussianBlur(.22)); snow.save(env/'snow.png',optimize=True)
 
-for name, size in PRESETS.items():
-    env = ROOT / "subpacks" / name / "textures" / "environment"
-    env.mkdir(parents=True, exist_ok=True)
-    src = seed.resize((size, size), Image.Resampling.LANCZOS)
-    src = ImageEnhance.Contrast(src).enhance(1.55 if name == "low" else 1.8)
-    streak = src.resize((size * 2, max(1, size // 3)), Image.Resampling.BICUBIC).resize((size, size), Image.Resampling.BICUBIC)
-    streak = streak.filter(ImageFilter.GaussianBlur(max(0.6, size / 180)))
-    mask = Image.blend(src, streak, 0.72)
-    mask = mask.point(lambda v: max(0, min(178, int((v - 100) * 1.78))))
-    cloud = Image.new("RGBA", (size, size), (239, 246, 252, 0))
-    cloud.putalpha(mask)
-    cloud.save(env / "clouds.png", optimize=True)
-
-    # Sun disc + soft corona. Shafts are created by Mie scattering + volumetric fog configs.
-    sun = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    px = sun.load()
-    c = (size - 1) / 2
-    for y in range(size):
-        for x in range(size):
-            q = math.hypot(x - c, y - c) / (size * 0.5)
-            disc = max(0.0, min(1.0, (0.44 - q) * 34.0))
-            corona = max(0.0, min(1.0, (0.74 - q) / 0.30)) ** 2.2
-            alpha = int(255 * max(disc, corona * 0.28))
-            warm = max(0.0, min(1.0, q / 0.74))
-            px[x, y] = (255, int(244 - 18*warm), int(205 - 42*warm), alpha)
-    sun.save(env / "sun.png", optimize=True)
-
-    moon = Image.new("RGBA", (size * 4, size * 2), (0, 0, 0, 0))
-    mp = moon.load()
-    for py in range(2):
-        for pxi in range(4):
-            phase = py * 4 + pxi
-            for y in range(size):
-                for x in range(size):
-                    dx = (x - c) / (size * 0.5)
-                    dy = (y - c) / (size * 0.5)
-                    rr = math.hypot(dx, dy)
-                    if rr > 1:
-                        continue
-                    terminator = math.cos(phase / 8 * math.tau) * 0.78
-                    lit = (dx >= terminator) if phase < 4 else (dx <= terminator)
-                    val = int(212 + 16 * (1 - rr))
-                    aa = int(255 * max(0, min(1, (1.01 - rr) * 14)))
-                    mp[pxi * size + x, py * size + y] = (val, min(255, val + 7), 255, aa if lit else int(aa * 0.14))
-    moon.save(env / "moon_phases.png", optimize=True)
-
-    # No grass/foliage colormap override: preserve natural colors from vanilla or the user's texture pack.
-
-
-# Bedrock custom caustics are a vertical strip of square frames. Derivative ships 60 frames at 128px.
-# Prefer the exact/converted Derivative atlas from the supplied source when available locally.
-# CI/repository builds fall back to a deterministic low-contrast reconstruction with identical 128x60 layout.
-W = 128
-FRAMES = 60
-source_candidates = [
-    ROOT.parent / "derivative_src" / "shaders" / "texture" / "water" / "Caustics.png",
-    ROOT / "third_party_runtime" / "Derivative_Caustics.png",
+# --- Derivative 60-frame caustics atlas. Prefer exact supplied source. ---
+W=128; FRAMES=60
+source_candidates=[
+    ROOT/'third_party_runtime'/'Derivative_Caustics.png',
+    ROOT.parent/'derivative_src'/'shaders'/'texture'/'water'/'Caustics.png',
 ]
-source = next((x for x in source_candidates if x.is_file()), None)
+source=next((p for p in source_candidates if p.is_file()),None)
 if source:
-    caustics = Image.open(source).convert("RGBA")
+    # Preserve the original Derivative PNG byte-for-byte when available; no resampling or re-encoding.
+    caustics=None
 else:
-    caustics = Image.new("RGBA", (W, W * FRAMES), (0,0,0,0))
+    # Deterministic fallback only for CI if source asset is absent.
+    caustics=Image.new('RGBA',(W,W*FRAMES),(0,0,0,0))
     for frame in range(FRAMES):
-        phase = frame / FRAMES * math.tau
-        fr = Image.new("L", (W, W), 0); fp=fr.load()
+        ph=frame/FRAMES*math.tau; fr=Image.new('L',(W,W),0); fp=fr.load()
         for y in range(W):
             yy=y/W*math.tau
             for x in range(W):
                 xx=x/W*math.tau
-                a=math.sin(xx*2.4+0.70*math.sin(yy*1.7+phase)+phase)
-                b=math.sin(yy*2.8+0.64*math.sin(xx*1.9-phase)-phase*1.1)
-                c=math.sin((xx+yy)*1.65+0.52*math.sin(xx*3.5-yy*2.6+phase*.7))
-                ridge=max(0.0,1.0-abs(a+b)*1.55)**4.0 + 0.55*max(0.0,1.0-abs(b+c*.7)*1.8)**4.6
-                fp[x,y]=int(min(112, 8+92*min(1.0,ridge)))
-        fr=fr.filter(ImageFilter.GaussianBlur(.55))
-        rgba=Image.new("RGBA",(W,W),(255,238,208,0)); rgba.putalpha(fr.point(lambda v:max(4,min(72,int(v*.58)))))
+                a=math.sin(xx*2.2+.7*math.sin(yy*1.6+ph)+ph)
+                b=math.sin(yy*2.7+.65*math.sin(xx*1.8-ph)-ph*1.1)
+                q=max(0,1-abs(a+b)*1.6)**4
+                fp[x,y]=int(10+115*q)
+        fr=fr.filter(ImageFilter.GaussianBlur(.45)); rgba=Image.new('RGBA',(W,W),(255,244,218,0)); rgba.putalpha(fr)
         caustics.paste(rgba,(0,frame*W))
-tex = ROOT / "textures"; tex.mkdir(exist_ok=True)
-dst = tex / "dlavie"; dst.mkdir(parents=True, exist_ok=True)
-caustics.save(dst / "derivative_caustics.png", optimize=True)
-(tex / "textures_list.json").write_text('[\n  "textures/dlavie/derivative_caustics"\n]\n', encoding="utf-8")
+dst=ROOT/'textures'/'dlavie'; dst.mkdir(parents=True,exist_ok=True)
+if source:
+    (dst/'derivative_caustics.png').write_bytes(source.read_bytes())
+else:
+    caustics.save(dst/'derivative_caustics.png',optimize=True)
+(ROOT/'textures'/'textures_list.json').write_text('[\n  "textures/dlavie/derivative_caustics"\n]\n',encoding='utf-8')
 
-# Environment textures are also written at pack root. Some Bedrock render paths resolve
-# these canonical locations directly even when visual JSON comes from a subpack.
-root_env = ROOT / "textures" / "environment"; root_env.mkdir(parents=True, exist_ok=True)
-hi = ROOT / "subpacks" / "high" / "textures" / "environment"
-for name in ("clouds.png","sun.png","moon_phases.png"):
-    (root_env/name).write_bytes((hi/name).read_bytes())
-print("Generated DLavie Visual runtime assets (60-frame caustics + Derivative-profile cirrus)")
+# Mirror environment assets into each selectable subpack so Bedrock resolves them regardless of overlay order.
+for pre in ('low','medium','high'):
+    pe=ROOT/'subpacks'/pre/'textures'/'environment'; pe.mkdir(parents=True,exist_ok=True)
+    for n in ('sun.png','moon_phases.png','clouds.png','rain.png','snow.png'):
+        (pe/n).write_bytes((env/n).read_bytes())
+print('Generated DLavie Visual 2.3 environment: cirrus, round sun, rain/snow, Derivative caustics')
