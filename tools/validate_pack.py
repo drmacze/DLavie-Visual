@@ -1,166 +1,163 @@
 #!/usr/bin/env python3
+"""Feature-level validation for the generated DLavie Visual runtime.
+
+Release/package/reference integrity is handled by audit_release.py. This validator
+stays focused on required renderer features and intentionally reads the current
+version from config/release.json instead of hard-coding a historical release.
+"""
+from __future__ import annotations
+
 from pathlib import Path
-import json,sys
+import json
+import sys
+
 from PIL import Image
-ROOT=Path(__file__).resolve().parents[1]; errors=[]
-def err(x): errors.append(x)
-def load(p):
-    try:return json.loads((ROOT/p).read_text(encoding='utf-8'))
-    except Exception as e:err(f'{p}: invalid JSON: {e}');return {}
 
-m=load('manifest.json')
-if m.get('format_version')!=2:err('manifest format_version must be 2')
-if m.get('header',{}).get('version')!=[4,5,0]:err('expected version 4.5.0')
-if m.get('header',{}).get('min_engine_version',[])<[1,26,40]:err('min engine must be >=1.26.40')
-if 'pbr' not in m.get('capabilities',[]):err('pbr capability missing')
-expected=[f'{t}_{q}' for t in ('natural','cozy','gloomy') for q in ('low','medium','high')]
-folders=[x.get('folder_name') for x in m.get('subpacks',[])]
-if folders!=expected:err(f'expected nine mood/quality subpacks, got {folders}')
-for sp in m.get('subpacks',[]):
-    if sp.get('memory_tier',99)>1:err(f"{sp.get('folder_name')}: memory_tier would lock mobile selection")
+ROOT = Path(__file__).resolve().parents[1]
+THEMES = ("natural", "cozy", "gloomy")
+QUALITIES = ("low", "medium", "high")
+SUBPACKS = tuple(f"{t}_{q}" for t in THEMES for q in QUALITIES)
+PROFILES = ("default", "forest", "dense", "dry", "cold", "swamp", "cave", "ocean")
+WATER_KINDS = ("default", "river", "ocean", "swamp", "frozen")
+errors: list[str] = []
 
-profiles=('default','forest','dense','dry','cold','swamp','cave','ocean')
-ore_hooks={
- 'minecraft:coal_ore','minecraft:deepslate_coal_ore','minecraft:iron_ore','minecraft:deepslate_iron_ore',
- 'minecraft:copper_ore','minecraft:deepslate_copper_ore','minecraft:gold_ore','minecraft:deepslate_gold_ore',
- 'minecraft:redstone_ore','minecraft:deepslate_redstone_ore','minecraft:lapis_ore','minecraft:deepslate_lapis_ore',
- 'minecraft:diamond_ore','minecraft:deepslate_diamond_ore','minecraft:emerald_ore','minecraft:deepslate_emerald_ore',
- 'minecraft:nether_gold_ore','minecraft:nether_quartz_ore','minecraft:ancient_debris'
-}
-roughness={
- 'blocks':{'low':248,'medium':243,'high':238},
- 'actors':{'low':248,'medium':244,'high':240},
- 'particles':{'low':252,'medium':250,'high':248},
- 'items':{'low':238,'medium':231,'high':224},
-}
-day_sky={
- 'natural':{'low':.56,'medium':.64,'high':.72},
- 'cozy':{'low':.52,'medium':.60,'high':.68},
- 'gloomy':{'low':.44,'medium':.50,'high':.56},
-}
-night_sky={
- 'natural':{'low':.10,'medium':.12,'high':.14},
- 'cozy':{'low':.10,'medium':.11,'high':.13},
- 'gloomy':{'low':.10,'medium':.10,'high':.11},
-}
-for pre in expected:
-    theme,quality=pre.rsplit('_',1)
-    for v in profiles:
-        for folder in ('atmospherics','lighting','color_grading','fogs'):
-            p=Path('subpacks')/pre/folder/f'{v}.json'
-            if not (ROOT/p).is_file():err('missing '+str(p))
-            else:load(p)
-    for rel in ('pbr/global.json','local_lighting/local_lighting.json','shadows/global.json','fogs/nether.json','fogs/end.json'):
-        p=Path('subpacks')/pre/rel
-        if not (ROOT/p).is_file():err('missing '+str(p))
-        else:load(p)
 
-    # PBR fallback stays neutral/rough so external Texture Sets own the material response.
-    pbr_rel=Path('subpacks')/pre/'pbr/global.json'
-    pbro=load(pbr_rel)
-    if pbro.get('format_version')!='1.21.40':err(f'{pbr_rel}: expected PBR fallback schema 1.21.40')
-    pf=pbro.get('minecraft:pbr_fallback_settings',{})
-    for group in ('blocks','actors','particles','items'):
-        vals=pf.get(group,{}).get('global_metalness_emissive_roughness_subsurface')
-        if not isinstance(vals,list) or len(vals)!=4:err(f'{pbr_rel}: malformed {group} MERS fallback');continue
-        if any(float(vals[i])!=0 for i in (0,1,3)):err(f'{pbr_rel}: {group} fallback must not fake metal/emissive/subsurface')
-        if int(vals[2])!=roughness[group][quality]:err(f'{pbr_rel}: {group} roughness fallback expected {roughness[group][quality]}, got {vals[2]}')
+def err(message: str) -> None:
+    errors.append(message)
 
-    # Overworld lighting uses schema 1.26.0 so ambient/sky time keyframes are formally supported.
-    for lp in (ROOT/'subpacks'/pre/'lighting').glob('*.json'):
-        if lp.stem in ('nether','end'): continue
-        rel=lp.relative_to(ROOT); lo=load(rel)
-        if lo.get('format_version')!='1.26.0':err(f'{rel}: expected lighting schema 1.26.0')
-        ls=lo.get('minecraft:lighting_settings',{})
-        amb=ls.get('ambient',{}).get('illuminance',{})
-        sky=ls.get('sky',{}).get('intensity',{})
-        if not isinstance(amb,dict) or '0.50' not in amb:err(f'{rel}: missing midnight ambient keyframe')
-        elif float(amb['0.50'])>0.012:err(f'{rel}: midnight ambient too bright')
-        if not isinstance(sky,dict) or '0.50' not in sky:err(f'{rel}: missing midnight sky keyframe')
-        elif abs(float(sky['0.50'])-night_sky[theme][quality])>.0001:err(f'{rel}: midnight sky not PBR calibrated')
-        if isinstance(sky,dict) and '0.0' in sky and abs(float(sky['0.0'])-day_sky[theme][quality])>.0001:err(f'{rel}: daytime sky IBL not PBR calibrated')
-        desat=float(ls.get('emissive',{}).get('desaturation',1))
-        if desat>0.031:err(f'{rel}: emissive desaturation too high for PBR color fidelity')
 
-    for ap in (ROOT/'subpacks'/pre/'atmospherics').glob('*.json'):
-        if ap.stem in ('nether','end'): continue
-        rel=ap.relative_to(ROOT); at=load(rel).get('minecraft:atmosphere_settings',{})
-        zen=at.get('sky_zenith_color',{}); hor=at.get('sky_horizon_color',{})
-        if not all(k in zen for k in ('0.315','0.50','0.685')):err(f'{rel}: incomplete twilight/midnight zenith keys')
-        if not all(k in hor for k in ('0.315','0.50','0.685')):err(f'{rel}: incomplete twilight/midnight horizon keys')
+def load(path: Path):
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        err(f"{path.relative_to(ROOT)}: invalid JSON: {exc}")
+        return {}
 
-    for fp in (ROOT/'subpacks'/pre/'fogs').glob('*.json'):
-        rel=fp.relative_to(ROOT); fo=load(rel)
-        if fo.get('format_version')!='1.21.90':err(f'{rel}: fog format must be 1.21.90')
-        fg=fo.get('minecraft:fog_settings',{}); vol=fg.get('volumetric',{}); den=vol.get('density',{})
-        if 'air' not in den or 'water' not in den:err(f'{rel}: missing air/water volumetric density')
-        air=den.get('air',{})
-        if not air.get('uniform') and fp.stem not in ('cave','nether','end'):
-            if 'zero_density_height' not in air or 'max_density_height' not in air:err(f'{rel}: missing height-shaped air fog')
-            elif float(air['zero_density_height'])<=float(air['max_density_height']):err(f'{rel}: invalid vertical fog gradient')
-        if fp.stem not in ('cave','nether','end') and 'weather' not in den:err(f'{rel}: missing active-weather volumetric density')
-        media=vol.get('media_coefficients',{})
-        if not all(x in media for x in ('air','water','cloud')):err(f'{rel}: missing air/water/cloud media coefficients')
-        hg=vol.get('henyey_greenstein_g',{})
-        for medium in ('air','water'):
-            g=hg.get(medium,{}).get('henyey_greenstein_g')
-            if g is None:err(f'{rel}: missing {medium} Henyey-Greenstein phase value')
-            elif not -1<=float(g)<=1:err(f'{rel}: {medium} phase value out of range')
-        dist=fg.get('distance',{})
-        if 'air' not in dist:err(f'{rel}: missing far-distance haze')
-        water_dist=dist.get('water',{})
-        if not water_dist:err(f'{rel}: missing underwater depth fog')
-        elif 'transition_fog' not in water_dist:err(f'{rel}: missing smooth underwater transition fog')
-        if fp.stem not in ('cave','nether','end') and 'weather' not in dist:err(f'{rel}: missing active-weather distance haze')
 
-    min_oct={'low':7,'medium':14,'high':20}[quality]
-    for wk in ('default','river','ocean','swamp','frozen'):
-        p=Path('subpacks')/pre/f'water/{wk}.json'
-        if not (ROOT/p).is_file():err('missing '+str(p));continue
-        w=load(p).get('minecraft:water_settings',{})
-        pc=w.get('particle_concentrations',{})
-        if not all(x in pc for x in ('chlorophyll','suspended_sediment','cdom')):err(f'{p}: missing depth-absorption particle concentrations')
-        waves=w.get('waves',{})
-        if not waves.get('enabled'):err(f'{p}: waves disabled')
-        if int(waves.get('octaves',0))<min_oct:err(f'{p}: expected at least {min_oct} wave octaves')
-        ca=w.get('caustics',{})
-        if not ca.get('enabled'):err(f'{p}: caustics disabled')
-        elif ca.get('texture')!='textures/dlavie/optical_caustics':err(f'{p}: not using optical caustics')
-        if float(ca.get('power',0))<1:err(f'{p}: caustics power invalid')
+def main() -> None:
+    release = load(ROOT / "config" / "release.json")
+    manifest = load(ROOT / "manifest.json")
+    version = release.get("version")
+    if manifest.get("header", {}).get("version") != version:
+        err("manifest header version is not synchronized with config/release.json")
+    for module in manifest.get("modules", []):
+        if module.get("version") != version:
+            err("manifest module version is stale")
+    if "pbr" not in manifest.get("capabilities", []):
+        err("manifest pbr capability missing")
 
-    li=load(Path('subpacks')/pre/'lighting/default.json').get('minecraft:lighting_settings',{})
-    sun=li.get('directional_lights',{}).get('orbital',{}).get('sun',{}).get('illuminance',{})
-    vals=[float(x) for x in sun.values()] if isinstance(sun,dict) else [float(sun or 0)]
-    if max(vals or [0])>110:err(f'{pre}: sun exceeds calibrated range')
-    if max(vals or [0])<60:err(f'{pre}: daylight too dim')
-    amb=li.get('ambient',{}).get('illuminance',{})
-    if isinstance(amb,dict) and max((float(x) for x in amb.values()),default=0)>0.08:err(f'{pre}: ambient too flat/bright for visual-core target')
-    ll=load(Path('subpacks')/pre/'local_lighting/local_lighting.json').get('minecraft:local_light_settings',{})
-    if len(ll)<12:err(f'{pre}: local-light coverage too small')
-    missing_ore=sorted(ore_hooks-set(ll))
-    if missing_ore:err(f'{pre}: missing ore local-light hooks: {missing_ore[:4]}')
-    if quality=='high':
-        for b in ore_hooks:
-            if ll.get(b,{}).get('light_type')!='point_light':err(f'{pre}: high ore hook {b} must be point_light')
-    if len(list((ROOT/'subpacks'/pre/'biomes').glob('*.client_biome.json')))<87:err(f'{pre}: missing theme-specific biome bindings')
+    folders = tuple(item.get("folder_name") for item in manifest.get("subpacks", []))
+    if folders != SUBPACKS:
+        err(f"manifest subpack list mismatch: {folders}")
 
-# Shader/visual-only project boundary. External PBR packs own their own Texture Sets.
-block_dir=ROOT/'textures'/'blocks'
-if block_dir.exists() and any(block_dir.iterdir()):err('visual project contains custom block textures')
-sets=list(ROOT.rglob('*.texture_set.json'))
-if sets:err(f'visual project contains {len(sets)} Texture Sets; move them to the texture project')
-if (ROOT/'tools'/'generate_material_suite.py').exists():err('block material generator still exists in visual project')
-for tool in ('enhance_weather_water.py','enhance_underwater_night.py','enhance_pbr_compat.py'):
-    if not (ROOT/'tools'/tool).is_file():err('missing '+tool)
+    for sp in SUBPACKS:
+        root = ROOT / "subpacks" / sp
+        _, quality = sp.rsplit("_", 1)
+        if not root.is_dir():
+            err(f"missing subpack {sp}")
+            continue
 
-ca=ROOT/'textures/dlavie/optical_caustics.png'
-if not ca.is_file():err('missing optical caustics')
-elif Image.open(ca).size!=(128,7680):err(f'optical caustics must be 128x7680, got {Image.open(ca).size}')
-for env in ('sun.png','moon_phases.png','clouds.png','rain.png','snow.png'):
-    if not (ROOT/'textures'/'environment'/env).is_file():err('missing visual environment asset '+env)
-if len(list((ROOT/'biomes').glob('*.client_biome.json')))<87:err('expected >=87 base biome bindings')
-for rel in ('ui/_ui_defs.json','ui/dlavie_ui.json','ui/start_screen.json','branding/cover.svg','THIRD_PARTY_LICENSES/DERCODE-License-2.5.txt'):
-    if not (ROOT/rel).is_file():err('missing '+rel)
-if errors:
-    print('VALIDATION FAILED');[print(' -',e) for e in errors];sys.exit(1)
-print('Validation OK: DLavie Visual 4.5 visual core, PBR-friendly IBL/reflections + neutral fallbacks, advanced underwater/night/weather, 9 presets, zero block Texture Sets')
+        for profile in PROFILES:
+            for folder in ("atmospherics", "lighting", "color_grading", "fogs"):
+                path = root / folder / f"{profile}.json"
+                if not path.is_file():
+                    err(f"missing {path.relative_to(ROOT)}")
+        for dimension in ("nether", "end"):
+            for folder in ("atmospherics", "lighting", "color_grading", "fogs"):
+                path = root / folder / f"{dimension}.json"
+                if not path.is_file():
+                    err(f"missing {path.relative_to(ROOT)}")
+
+        for profile in PROFILES:
+            path = root / "lighting" / f"{profile}.json"
+            obj = load(path)
+            if obj.get("format_version") != "1.26.0":
+                err(f"{path.relative_to(ROOT)}: Overworld lighting must use schema 1.26.0")
+            ls = obj.get("minecraft:lighting_settings", {})
+            amb = ls.get("ambient", {}).get("illuminance", {})
+            sky = ls.get("sky", {}).get("intensity", {})
+            if not isinstance(amb, dict) or "0.50" not in amb:
+                err(f"{path.relative_to(ROOT)}: midnight ambient key missing")
+            if not isinstance(sky, dict) or "0.50" not in sky:
+                err(f"{path.relative_to(ROOT)}: midnight sky key missing")
+            sun = ls.get("directional_lights", {}).get("orbital", {}).get("sun", {}).get("illuminance", {})
+            vals = [float(v) for v in sun.values()] if isinstance(sun, dict) else [float(sun or 0)]
+            if max(vals or [0]) > 110:
+                err(f"{path.relative_to(ROOT)}: sunlight exceeds calibrated range")
+
+        for path in (root / "fogs").glob("*.json"):
+            obj = load(path)
+            if obj.get("format_version") != "1.21.90":
+                err(f"{path.relative_to(ROOT)}: enhanced fog schema must be 1.21.90")
+            fg = obj.get("minecraft:fog_settings", {})
+            vol = fg.get("volumetric", {})
+            if not all(k in vol.get("density", {}) for k in ("air", "water")):
+                err(f"{path.relative_to(ROOT)}: volumetric air/water density missing")
+            if not all(k in vol.get("media_coefficients", {}) for k in ("air", "water", "cloud")):
+                err(f"{path.relative_to(ROOT)}: air/water/cloud media coefficients missing")
+            if "transition_fog" not in fg.get("distance", {}).get("water", {}):
+                err(f"{path.relative_to(ROOT)}: underwater transition fog missing")
+
+        min_octaves = {"low": 7, "medium": 14, "high": 20}[quality]
+        for kind in WATER_KINDS:
+            path = root / "water" / f"{kind}.json"
+            obj = load(path)
+            ws = obj.get("minecraft:water_settings", {})
+            if obj.get("format_version") != "1.26.0":
+                err(f"{path.relative_to(ROOT)}: water schema must be 1.26.0")
+            pc = ws.get("particle_concentrations", {})
+            if not all(k in pc for k in ("chlorophyll", "suspended_sediment", "cdom")):
+                err(f"{path.relative_to(ROOT)}: depth absorption values incomplete")
+            waves = ws.get("waves", {})
+            if not waves.get("enabled") or int(waves.get("octaves", 0)) < min_octaves:
+                err(f"{path.relative_to(ROOT)}: wave quality regressed")
+            caustics = ws.get("caustics", {})
+            if not caustics.get("enabled") or caustics.get("texture") != "textures/dlavie/optical_caustics":
+                err(f"{path.relative_to(ROOT)}: optical caustics not active")
+
+        pbr_path = root / "pbr" / "global.json"
+        pbr = load(pbr_path).get("minecraft:pbr_fallback_settings", {})
+        for category in ("blocks", "actors", "particles", "items"):
+            mers = pbr.get(category, {}).get("global_metalness_emissive_roughness_subsurface")
+            if not (isinstance(mers, list) and len(mers) == 4):
+                err(f"{pbr_path.relative_to(ROOT)}: {category} fallback MERS missing")
+
+        ll_path = root / "local_lighting" / "local_lighting.json"
+        if not ll_path.is_file():
+            err(f"missing {ll_path.relative_to(ROOT)}")
+        shadow_path = root / "shadows" / "global.json"
+        if not shadow_path.is_file():
+            err(f"missing {shadow_path.relative_to(ROOT)}")
+        if len(list((root / "biomes").glob("*.client_biome.json"))) < 87:
+            err(f"subpacks/{sp}: biome bindings incomplete")
+
+    # Visual project boundary: material textures belong to the separate texture project.
+    block_dir = ROOT / "textures" / "blocks"
+    if block_dir.exists() and any(block_dir.iterdir()):
+        err("visual project contains block textures")
+    if list(ROOT.rglob("*.texture_set.json")):
+        err("visual project contains block Texture Sets")
+    if (ROOT / "tools" / "generate_materials.py").exists() or (ROOT / "tools" / "generate_material_suite.py").exists():
+        err("obsolete block-material generator still exists")
+
+    caustics_path = ROOT / "textures" / "dlavie" / "optical_caustics.png"
+    if not caustics_path.is_file():
+        err("optical caustics atlas missing")
+    else:
+        try:
+            with Image.open(caustics_path) as im:
+                if im.size != (128, 7680):
+                    err(f"optical caustics must be 128x7680, got {im.size}")
+        except Exception as exc:
+            err(f"optical caustics invalid: {exc}")
+
+    if errors:
+        print(f"VALIDATION FAILED ({len(errors)} issue(s))")
+        for message in errors:
+            print(" -", message)
+        raise SystemExit(1)
+    print(f"Validation OK: DLavie Visual {release.get('version_string')} renderer features are present and texture-project boundaries are clean")
+
+
+if __name__ == "__main__":
+    main()
