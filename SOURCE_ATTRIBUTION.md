@@ -28,8 +28,15 @@ profile values and visual systems into Bedrock-supported atmosphere, lighting, f
 PBR fallback, local lights, shadows, water, color grading, environment textures, and
 per-biome bindings.
 
-The runtime 60-frame caustics atlas can use the supplied Derivative source when it is
-available to the build; public CI has a deterministic low-contrast fallback with the
-same 60x128 frame layout. The cirrus density map is a deterministic Bedrock
-reconstruction following Derivative's Profile.Derivative cirrus mode rather than a
-copy of Java-only cloud LUT data.
+The runtime water caustics can use the **original Derivative 25.1.0 60-frame 128×128 atlas**
+from the supplied source. When the supplied source asset is present, the build copies it
+byte-for-byte into `textures/dlavie/derivative_caustics.png`; public CI falls back to a
+deterministic 60-frame atlas if that private build input is absent. The cirrus texture
+itself is a deterministic Bedrock reconstruction because Derivative's Java cloud
+LUT/noise pipeline cannot be executed by retail RenderDragon.
+
+## Runtime source asset
+
+A local `third_party_runtime/Derivative_Caustics.png` can hold the original Derivative
+25.1.0 caustics atlas from the supplied source. If distributed, that asset remains
+covered by DERCODE 2.5 plus the author credits above.
