@@ -8,6 +8,7 @@ python3 tools/generate_assets.py
 python3 tools/generate_optical_caustics.py
 python3 tools/generate_themes.py
 python3 tools/enhance_visual_core.py
+python3 tools/enhance_volumetric_fog.py
 python3 tools/validate_pack.py
 rm -rf dist
 mkdir -p dist
