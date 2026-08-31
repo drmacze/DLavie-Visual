@@ -2,16 +2,16 @@
   "format_version": 2,
   "header": {
     "name": "DLavie Visual",
-    "description": "DLavie Visual 4.5.3 • fixed vanilla biome bindings • PBR visual core + underwater/night/weather • no block textures",
+    "description": "DLavie Visual 4.6.0 • deferred PBR core + expanded colored lighting • underwater/night/weather • no block textures",
     "uuid": "59261ff1-d2af-41da-a66e-5065854861b2",
-    "version": [4, 5, 3],
+    "version": [4, 6, 0],
     "min_engine_version": [1, 26, 40]
   },
   "modules": [
     {
       "type": "resources",
       "uuid": "435b96ed-3dbb-45cf-9cd9-33d9bf958870",
-      "version": [4, 5, 3]
+      "version": [4, 6, 0]
     }
   ],
   "capabilities": ["pbr"],
