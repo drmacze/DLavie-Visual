@@ -53,6 +53,9 @@ python3 -B tools/enhance_volumetric_fog.py
 python3 -B tools/enhance_weather_water.py
 python3 -B tools/enhance_underwater_night.py
 python3 -B tools/enhance_pbr_compat.py
+# Deferred pass runs after PBR compatibility so it can patch both selectable
+# subpacks and the Natural-Medium root renderer failsafe installed above.
+python3 -B tools/enhance_deferred_core.py
 
 # Runtime canary: prove that pack-active actually means vanilla biomes resolve DLavie renderer IDs.
 python3 -B - <<'PY'
