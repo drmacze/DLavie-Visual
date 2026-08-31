@@ -1,53 +1,99 @@
 # DLavie Visual
 
-**DLavie Visual** adalah paket visual orisinal untuk Minecraft Bedrock Edition dengan target minimum **iPhone 11**. Paket ini memakai resource-pack API resmi dan menyediakan tiga subpack yang dapat dipilih langsung dari ikon roda gigi paket:
+![DLavie Visual cover](branding/cover.svg)
 
-| Preset | Target | Resolusi efek | Karakter |
-| --- | --- | ---: | --- |
-| Low | FPS/baterai | 32 px | awan ringan, warna lembut |
-| Medium | rekomendasi iPhone 11 | 64 px | keseimbangan kualitas dan performa |
-| High | kualitas | 128 px | awan lebih detail, warna lebih kaya |
+**DLavie Visual** is a Minecraft Bedrock **Vibrant Visuals + PBR** resource pack
+for the 26.x renderer line, with **Bedrock 26.45** as the primary target and
+**1.26.40** as the manifest compatibility floor. It is built for supported
+iPhone/iPad and Android hardware, with **iPhone 11 (A13)** as the minimum iPhone
+performance target.
 
-## Batasan penting
+## What is ported
 
-Tautan referensi pengguna, **Derivative [main]**, adalah shader Java (Iris/OptiFine) milik DureXXX dan berlisensi *All Rights Reserved*. Karena itu repositori ini **tidak menyalin, membongkar, atau mendistribusikan** kode maupun aset Derivative. Ini adalah implementasi *clean-room* orisinal dengan tujuan visual serupa (langit sinematik, warna alam, matahari/bulan yang lebih halus).
+The uploaded Derivative 25.1.0 Java shader was audited and its visual priorities
+were mapped to Bedrock-supported equivalents:
 
-Minecraft Bedrock retail di iOS menggunakan RenderDragon dan tidak menyediakan pipeline shader Java. Karena itu port fitur 1:1/“100%” tidak mungkin lewat resource pack resmi. Paket ini sengaja memilih jalur resmi agar dapat diimpor tanpa jailbreak, injector, atau executable pihak ketiga, serta lebih stabil setelah pembaruan Minecraft.
+| Derivative feature | DLavie Visual / Bedrock equivalent |
+|---|---|
+| Atmospheric LUT / sky scattering | Vibrant Visuals atmosphere keyframes, Rayleigh/Mie tuning |
+| Volumetric fog / light shafts | Bedrock volumetric fog density + media coefficients |
+| Volumetric / planar cloud look | animated vanilla cloud pipeline + custom density/cloud texture + atmospheric scattering |
+| Direct sun/moon lighting | keyframed directional lighting |
+| Rough reflections / SSR intent | Vibrant Visuals PBR roughness/metalness + engine reflections; water reflections remain engine-managed |
+| Physics ocean / caustics | configurable Bedrock wave octaves, shape, pull, speed, caustics |
+| Color grading / white balance | Vibrant Visuals grading, saturation, contrast, ~7000K white balance |
+| Bloom/exposure intent | HDR/tone-mapping-friendly grading; final bloom/exposure stays renderer controlled |
+| PBR materials | global MERS fallback so vanilla/third-party non-PBR textures still react plausibly to deferred lighting |
 
-## Instalasi iPhone/iPad
+A literal GLSL 1:1 port is not technically possible on retail Bedrock because
+Iris/OptiFine compute/fragment shader entry points are not exposed by RenderDragon.
+This repository therefore targets **visual equivalence**, not byte/code equivalence.
 
-1. Unduh `DLavie-Visual.mcpack` dari hasil build/release.
-2. Buka berkas melalui aplikasi **Files**, lalu pilih Minecraft.
-3. Di Minecraft, buka **Settings → Global Resources → My Packs**.
-4. Aktifkan **DLavie Visual**, tekan ikon roda gigi, lalu pilih Low, Medium, atau High.
-5. Mulai ulang dunia bila preset diganti. Medium direkomendasikan untuk iPhone 11.
+## Presets
 
-### Tips stabilitas
+| Preset | Intended device | Main cost controls |
+|---|---|---|
+| **Low** | iPhone 11 while recording / supported lower-end Android | blocky shadows, 8 water octaves, reduced caustics, reduced point-light map, 64px environment assets |
+| **Medium** | **iPhone 11 recommended** | balanced shadows, 16 water octaves + caustics, core point lights, 128px environment assets |
+| **High** | newer iPhone/iPad / stronger Android | soft shadows, 28 water octaves, stronger caustics, broader point lights, 256px environment assets |
 
-- Gunakan jarak render 8–12 chunk pada iPhone 11.
-- Matikan antialiasing bila perangkat panas atau baterai cepat turun.
-- Jangan menumpuk paket lain yang mengganti `textures/environment/*` atau colormap.
-- Turunkan ke Low saat merekam layar; naikkan ke High hanya bila frame time stabil.
+Legacy manifest `memory_tier` thresholds are deliberately spaced so a 4 GB-class
+mobile device is more likely to land on Medium rather than High when Bedrock
+auto-selects a compatible subpack.
 
-## Build dan validasi
+## PBR + other texture packs
 
-Persyaratan: Python 3 dan `zip`.
+DLavie Visual does not redistribute Mojang's vanilla block textures. Instead it
+provides PBR fallback material values. A compatible PBR texture pack lower in the
+resource stack can still supply its own texture sets; where no texture set exists,
+DLavie's fallback roughness is used.
+
+## Installation
+
+1. Build or download `DLavie-Visual.mcpack`.
+2. Open it with Minecraft.
+3. Enable **DLavie Visual** in Global Resources or the world resource packs.
+4. Open the pack's gear icon and select Low, Medium, or High.
+5. In **Settings → Video**, select **Vibrant Visuals** when the device supports it.
+
+### iPhone 11 baseline
+
+Start with **Medium**, render distance around **8–12 chunks**, and the game's
+performance-biased Vibrant Visuals quality option. If the phone thermally throttles
+or you are screen-recording, use **Low**. High is intentionally not the iPhone 11
+baseline.
+
+## Build
+
+Requirements: Python 3 + Pillow.
 
 ```bash
+python3 -m pip install Pillow
 ./tools/build.sh
 ```
 
-Script build otomatis membuat seluruh PNG, memvalidasi struktur paket, lalu mengemasnya. Hasil build ada di `dist/DLavie-Visual.mcpack`.
+The output is `dist/DLavie-Visual.mcpack`.
 
-PNG dan folder `dist/` sengaja tidak dilacak Git karena semuanya merupakan keluaran deterministik dari `tools/generate_assets.py`. Dengan begitu pull request hanya berisi source code teks dan tetap dapat diproses oleh sistem review yang tidak mendukung file biner. Untuk hanya membuat atau memeriksa aset secara manual, jalankan:
+Validation only:
 
 ```bash
+python3 tools/generate_configs.py
 python3 tools/generate_assets.py
 python3 tools/validate_pack.py
 ```
 
-## Hak cipta dan kanal
+## Source / license compliance
 
-Copyright © 2026 DLavie. Seluruh kode dan aset **orisinal dalam proyek ini** dilindungi hak cipta DLavie; lihat [LICENSE](LICENSE). Informasi, demo, dan pembaruan tersedia di kanal YouTube **DLavie**.
+The supplied Derivative source is licensed under **DERCODE License Agreement 2.5**.
+The license is preserved verbatim and required original authors are credited in
+[SOURCE_ATTRIBUTION.md](SOURCE_ATTRIBUTION.md). The original project and DC/Derivative
+Discord are linked there as required for publication under the DLavie Visual name.
 
-Nama Minecraft adalah milik Mojang/Microsoft. Proyek ini tidak berafiliasi dengan Mojang, Microsoft, CurseForge, atau pembuat Derivative.
+## Compatibility statement
+
+The pack uses official Bedrock resource-pack/Vibrant Visuals interfaces rather than
+injectors, patched APK/IPAs, or RenderDragon hacks. That is the most update-resilient
+path for both iOS and Android. Repository validation can confirm structure and data,
+but no repository build can truthfully certify 100% FPS/stability across every
+Android GPU, OS build, thermal state, world, and render distance; device testing is
+still required before a public “100% tested” claim.

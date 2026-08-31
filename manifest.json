@@ -2,26 +2,27 @@
   "format_version": 2,
   "header": {
     "name": "DLavie Visual",
-    "description": "Visual Bedrock orisinal oleh DLavie • Low / Medium / High • YouTube: DLavie",
+    "description": "Vibrant Visuals + PBR • Low / Medium / High • tuned for iPhone 11+ & supported Android",
     "uuid": "59261ff1-d2af-41da-a66e-5065854861b2",
-    "version": [1, 0, 0],
-    "min_engine_version": [1, 21, 0]
+    "version": [2, 0, 0],
+    "min_engine_version": [1, 26, 40]
   },
   "modules": [
     {
       "type": "resources",
       "uuid": "435b96ed-3dbb-45cf-9cd9-33d9bf958870",
-      "version": [1, 0, 0]
+      "version": [2, 0, 0]
     }
   ],
+  "capabilities": ["pbr"],
   "subpacks": [
-    { "folder_name": "low", "name": "Low • FPS & Battery", "memory_tier": 1 },
-    { "folder_name": "medium", "name": "Medium • iPhone 11", "memory_tier": 2 },
-    { "folder_name": "high", "name": "High • Quality", "memory_tier": 3 }
+    {"folder_name": "low", "name": "Low • Mobile Performance", "memory_tier": 8},
+    {"folder_name": "medium", "name": "Medium • iPhone 11 Recommended", "memory_tier": 12},
+    {"folder_name": "high", "name": "High • Visual Quality", "memory_tier": 20}
   ],
   "metadata": {
-    "authors": ["DLavie"],
-    "license": "All Rights Reserved",
-    "url": "https://www.youtube.com/@DLavie"
+    "authors": ["DLavie", "DC Team / Derivative authors (source reference)"],
+    "license": "DLavie Visual Proprietary + DERCODE License Agreement 2.5 for Derivative source",
+    "url": "https://github.com/drmacze/DLavie-Visual"
   }
 }
